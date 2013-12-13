@@ -95,9 +95,13 @@ When defining a dataset, the following options are available:
 
 * `name` – The string used to identify the dataset. Used by typeahead.js to cache intelligently.
 
-* `valueKey` – The key used to access the value of the datum in the datum object. Defaults to `value`.
+* `valueKey` – The key used to access the value of the datum in the datum object. Defaults to `value`.  
+
+* `nameKey` – If the input display name name should be other than the unique value, then this is the name of the datum in the datum object. Defaults to `value` or the value of the valueKey.
 
 * `limit` – The max number of suggestions from the dataset to display for a given query. Defaults to `5`.
+
+* `minLength` – The minimum number characters entered in the input box before the typeahead fires up. Defaults to `1`.
 
 * `template` – The template used to render suggestions. Can be a string or a precompiled template. If not provided, suggestions will render as their value contained in a `<p>` element (i.e. `<p>value</p>`).
 
@@ -165,7 +169,7 @@ When configuring `remote`, the following options are available:
 
 * `dataType` – The type of data you're expecting from the server. See the [jQuery.ajax docs][jquery-ajax] for more info. Defaults to `json`.
 
-* `cache` – Determines whether or not the browser will cache responses. See the [jQuery.ajax docs][jquery-ajax] for more info.
+* `cache` – Determines whether or not JQuery will cache responses. See the [jQuery.ajax docs][jquery-ajax] for more info.  Note however that by default all remote responses are cached for each query.
 
 * `timeout` – Sets a timeout for requests. See the [jQuery.ajax docs][jquery-ajax] for more info.
 
@@ -183,19 +187,37 @@ When configuring `remote`, the following options are available:
 
 * `filter` – A function with the signature `filter(parsedResponse)` that transforms the response body into an array of datums. Expected to return an array of datums.
 
+### Computed
+Computed data is used in similar way as Remote data is.  The difference between those two is that while Remote handles direct Ajax request to get the data, Computed uses custom function specified by the user.  
+
+* `computedFunction` - Custom function with the signature `function(query, data)` to take control of the typeahead data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source.    
+In case this function is used for asynchronous data fetch it must return promise.  Both [JQuery promises](http://api.jquery.com/promise/ "Jquery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.  **Required.**
+
+* `rateLimitFn` – The function used for rate-limiting network requests. Can be either debounce or throttle. Defaults to debounce.
+
+* `rateLimitWait` – The time interval in milliseconds that will be used by rateLimitFn. Defaults to 300.
+
+* `maxParallelRequests` – The max number of parallel requests typeahead.js can have pending. Defaults to 6.
+
+* `filter` – A function with the signature filter(parsedResponse) that transforms the response body into an array of datums. Expected to return an array of datums.  
+
+See [this page](Cmputed.md) for details
+
+
+
 ### Custom Events
 
 typeahead.js triggers the following custom events:
 
-* `typeahead:initialized` – Triggered after initialization. If data needs to be prefetched, this event will not be triggered until after the prefetched data is processed.
+* `typeahead:initialized` – Triggered after initialization. If data needs to be prefetched, this event will not be triggered until after the prefetched data is processed.
 
-* `typeahead:opened` – Triggered when the dropdown menu of a typeahead is opened.
+* `typeahead:opened` – Triggered when the dropdown menu of a typeahead is opened.
 
-* `typeahead:closed` – Triggered when the dropdown menu of a typeahead is closed.
+* `typeahead:closed` – Triggered when the dropdown menu of a typeahead is closed.
 
-* `typeahead:selected` – Triggered when a suggestion from the dropdown menu is explicitly selected. The datum for the selected suggestion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
+* `typeahead:selected` – Triggered when a suggestion from the dropdown menu is explicitly selected. The datum for the selected suggestion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
 
-* `typeahead:autocompleted` – Triggered when the query is autocompleted. The datum used for autocompletion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
+* `typeahead:autocompleted` – Triggered when the query is autocompleted. The datum used for autocompletion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
 
 All custom events are triggered on the element initialized as a typeahead.
 
@@ -239,12 +261,17 @@ By default, the dropdown menu created by typeahead.js is going to look ugly and 
 When an end-user mouses or keys over a `.tt-suggestion`, the class `tt-is-under-cursor` will be added to it. You can use this class as a hook for styling the "under cursor" state of suggestions.
 
 Bootstrap Integration
----------------------
+---------------------  
 
 For simple autocomplete use cases, the typeahead component [Bootstrap][bootstrap] provides should suffice. However, if you'd prefer to take advantage of some of the advance features typeahead.js provides, here's what you'll need to do to integrate typeahead.js with Bootstrap:
 
 * If you're customizing Bootstrap, exclude the typeahead component. If you're depending on the standard *bootstrap.js*, ensure *typeahead.js* is loaded after it.
 * The DOM structure of the dropdown menu used by typeahead.js differs from the DOM structure of the Bootstrap dropdown menu. You'll need to load some [additional CSS][typeahead.js-bootstrap.css] in order to get the typeahead.js dropdown menu to fit the default Bootstrap theme.
+
+Knockout Intergration
+---------------------
+Knockout binding handler for this library is provided.  
+See [this page](Knockout.md) for details.
 
 Browser Support
 ---------------

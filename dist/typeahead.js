@@ -299,6 +299,7 @@
             requestCache = requestCache || new RequestCache();
             maxPendingRequests = utils.isNumber(o.maxParallelRequests) ? o.maxParallelRequests : maxPendingRequests || 6;
             this.url = o.url;
+            this.computedFunction = o.computedFunction;
             this.wildcard = o.wildcard || "%QUERY";
             this.filter = o.filter;
             this.replace = o.replace;
@@ -312,17 +313,33 @@
             this._get = (/^throttle$/i.test(o.rateLimitFn) ? utils.throttle : utils.debounce)(this._get, o.rateLimitWait || 300);
         }
         utils.mixin(Transport.prototype, {
-            _get: function(url, cb) {
-                var that = this;
+            _get: function(query, cb) {
+                var that = this, computedData = [];
                 if (belowPendingRequestsThreshold()) {
-                    this._sendRequest(url).done(done);
+                    if (this.computedFunction != null)
+                        if (Q) //JQuery wen does not resolve Q promises correctly so if Q is in use we use Q promises instead
+                            Q.when(this._sendComputed(query, computedData)).then(function () { done(computedData); });
+                        else
+                            $.when(this._sendComputed(query, computedData)).done(function () { done(computedData); });
+                    else
+                        this._sendRequest(query).done(done);
                 } else {
                     this.onDeckRequestArgs = [].slice.call(arguments, 0);
                 }
                 function done(resp) {
                     var data = that.filter ? that.filter(resp) : resp;
                     cb && cb(data);
-                    requestCache.set(url, resp);
+                    requestCache.set(query, resp);
+                }
+            },
+            _sendComputed: function (query,data) {
+                incrementPendingRequests();
+                if (Q)
+                    return Q.when(this.computedFunction(query, data)).then(allways);
+                else
+                    return $.when(this.computedFunction(query, data)).done(allways);
+                function allways() {
+                    decrementPendingRequests();
                 }
             },
             _sendRequest: function(url) {
@@ -344,7 +361,10 @@
             get: function(query, cb) {
                 var that = this, encodedQuery = encodeURIComponent(query || ""), url, resp;
                 cb = cb || utils.noop;
-                url = this.replace ? this.replace(this.url, encodedQuery) : this.url.replace(this.wildcard, encodedQuery);
+                if (this.url) 
+                    url = this.replace ? this.replace(this.url, encodedQuery) : this.url.replace(this.wildcard, encodedQuery);
+                else
+                    url = query;
                 if (resp = requestCache.get(url)) {
                     utils.defer(function() {
                         cb(that.filter ? that.filter(resp) : resp);
@@ -378,8 +398,8 @@
             if (utils.isString(o.template) && !o.engine) {
                 $.error("no template engine specified");
             }
-            if (!o.local && !o.prefetch && !o.remote) {
-                $.error("one of local, prefetch, or remote is required");
+            if (!o.local && !o.prefetch && !o.remote && !o.computed) {
+                $.error("one of local, prefetch, remote or computed is required");
             }
             this.name = o.name || utils.getUniqueId();
             this.limit = o.limit || 5;
@@ -387,10 +407,12 @@
             this.header = o.header;
             this.footer = o.footer;
             this.valueKey = o.valueKey || "value";
+            this.nameKey = o.nameKey || this.valueKey;
             this.template = compileTemplate(o.template, o.engine, this.valueKey);
             this.local = o.local;
             this.prefetch = o.prefetch;
             this.remote = o.remote;
+            this.computed = o.computed;
             this.itemHash = {};
             this.adjacencyList = {};
             this.storage = o.name ? new PersistentStorage(o.name) : null;
@@ -434,8 +456,9 @@
                 }
             },
             _transformDatum: function(datum) {
-                var value = utils.isString(datum) ? datum : datum[this.valueKey], tokens = datum.tokens || utils.tokenizeText(value), item = {
+                var value = utils.isString(datum) ? datum : datum[this.valueKey], name = utils.isString(datum) ? datum : datum[this.nameKey], tokens = datum.tokens || utils.tokenizeText(value), item = {
                     value: value,
+                    name: name,
                     tokens: tokens
                 };
                 if (utils.isString(datum)) {
@@ -511,7 +534,9 @@
             initialize: function() {
                 var deferred;
                 this.local && this._processLocalData(this.local);
-                this.transport = this.remote ? new Transport(this.remote) : null;
+                if (this.computed == 'undefined')
+                    this.computed = null;
+                this.transport = this.remote ? new Transport(this.remote) : this.computed ? new Transport(this.computed) : null;
                 deferred = this.prefetch ? this._loadPrefetchData(this.prefetch) : $.Deferred().resolve();
                 this.local = this.prefetch = this.remote = null;
                 this.initialize = function() {
@@ -526,16 +551,15 @@
                 }
                 terms = utils.tokenizeQuery(query);
                 suggestions = this._getLocalSuggestions(terms).slice(0, this.limit);
-                if (suggestions.length < this.limit && this.transport) {
+                if (this.transport)
                     cacheHit = this.transport.get(query, processRemoteData);
-                }
                 !cacheHit && cb && cb(suggestions);
                 function processRemoteData(data) {
                     suggestions = suggestions.slice(0);
                     utils.each(data, function(i, datum) {
                         var item = that._transformDatum(datum), isDuplicate;
                         isDuplicate = utils.some(suggestions, function(suggestion) {
-                            return item.value === suggestion.value;
+                            return item.value === suggestion.name;
                         });
                         !isDuplicate && suggestions.push(item);
                         return suggestions.length < that.limit;
@@ -942,7 +966,7 @@
                 }
             },
             _updateHint: function() {
-                var suggestion = this.dropdownView.getFirstSuggestion(), hint = suggestion ? suggestion.value : null, dropdownIsVisible = this.dropdownView.isVisible(), inputHasOverflow = this.inputView.isOverflow(), inputValue, query, escapedQuery, beginsWithQuery, match;
+                var suggestion = this.dropdownView.getFirstSuggestion(), hint = suggestion ? suggestion.name : null, dropdownIsVisible = this.dropdownView.isVisible(), inputHasOverflow = this.inputView.isOverflow(), inputValue, query, escapedQuery, beginsWithQuery, match;
                 if (hint && dropdownIsVisible && !inputHasOverflow) {
                     inputValue = this.inputView.getInputValue();
                     query = inputValue.replace(/\s{2,}/g, " ").replace(/^\s+/g, "");
@@ -963,7 +987,7 @@
             },
             _setInputValueToSuggestionUnderCursor: function(e) {
                 var suggestion = e.data;
-                this.inputView.setInputValue(suggestion.value, true);
+                this.inputView.setInputValue(suggestion.name, true);
             },
             _openDropdown: function() {
                 this.dropdownView.open();
@@ -980,7 +1004,7 @@
             _handleSelection: function(e) {
                 var byClick = e.type === "suggestionSelected", suggestion = byClick ? e.data : this.dropdownView.getSuggestionUnderCursor();
                 if (suggestion) {
-                    this.inputView.setInputValue(suggestion.value);
+                    this.inputView.setInputValue(suggestion.name);
                     byClick ? this.inputView.focus() : e.data.preventDefault();
                     byClick && utils.isMsie() ? utils.defer(this.dropdownView.close) : this.dropdownView.close();
                     this.eventBus.trigger("selected", suggestion.datum, suggestion.dataset);
@@ -1012,7 +1036,7 @@
                 hint = this.inputView.getHintValue();
                 if (hint !== "" && query !== hint) {
                     suggestion = this.dropdownView.getFirstSuggestion();
-                    this.inputView.setInputValue(suggestion.value);
+                    this.inputView.setInputValue(suggestion.name);
                     this.eventBus.trigger("autocompleted", suggestion.datum, suggestion.dataset);
                 }
             },
