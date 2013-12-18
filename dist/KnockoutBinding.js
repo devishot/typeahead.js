@@ -1,138 +1,304 @@
-ko.bindingHandlers.typeahead = {
-    init: function (element, valueAccessor, allBindingsAccessor, viewModel, bindingContext) {
-        var value = valueAccessor();
-        var name = ko.unwrap(value.name);
-        var valueKey = ko.unwrap(value.valueKey);
-        var nameKey = ko.unwrap(value.nameKey);
-        var limit = ko.unwrap(value.limit);
-        var minLength = ko.unwrap(value.minLength);
-        var template = ko.unwrap(value.template);
-        var templateElement = ko.unwrap(value.templateElement);
-        var engine = ko.unwrap(value.engine);
-        var header = ko.unwrap(value.header);
-        var footer = ko.unwrap(value.footer);
-        var local = ko.unwrap(value.local);
-        var prefetch = ko.unwrap(value.prefetch);
-        var remote = ko.unwrap(value.remote);
-        var computed = ko.unwrap(value.computed);
+//Generate datum object for typeahead, based on data record.
+//If you need tokens other than for the nameKey and valueKey then you specify those in comma seporated string (tokenFields)
+//If you need unwraped fields in the datum (i.e. for use in the hogan template engine) you specify those in comma seporated string (valueFields)
+//valueKey specifies the name of the datafield to be set as value/key in typeahead
+//nameKey specifies the name of the datafield to be set as the display name in the typeahead
+ko.typeaheadDatumGenerate = function (data, tokenFields, valueFields, valueKey, nameKey) {
+    if (!data)
+        return null;
+    valueKey = valueKey || 'value';
+    nameKey = nameKey || 'name';
+    var resObj = {};
+    var tokens = [];
+    var tokenFld = [];
+    var valueFld = valueFields.split(',');
+    if (!tokenFields) {
+        tokenFld.push(valueKey);
+        if (valueKey != nameKey)
+            tokenFld.push(valueKey);
+    } else
+        tokenFld = tokenFields.split(',');
+    resObj[valueKey] = ko.unwrap(data[valueKey]);
+    resObj[nameKey] = ko.unwrap(data[nameKey]);
+    resObj['data'] = data;
+    for (var i = 0; i < valueFld.length; i++)
+        resObj[valueFld[i].trim()] = ko.unwrap(data[valueFld[i].trim()]);
+    for (var i = 0; i < tokenFld.length; i++)
+        if (tokenFld[i].trim()) {
+            var val = ko.unwrap(data[tokenFld[i].trim()]);
+            if (val) {
+                var found = false;
+                for (var j = 0; j < tokens.length; j++)
+                    if (tokens[j] == val) {
+                        found = true;
+                        break;
+                    }
+                if (!found)
+                    tokens.push(ko.unwrap(data[tokenFld[i].trim()]));
+            }
+        }
+    resObj['tokens'] = tokens;
+    return resObj;
+};
 
-        //For convenience we also allow remote, prefetch and computed options to be defined globally 
-        var url = ko.unwrap(value.url);
-        var ttl = ko.unwrap(value.ttl);
-        var filter = ko.unwrap(value.filter);
-        var dataType = ko.unwrap(value.dataType);
-        var cache = ko.unwrap(value.cache);
-        var timeout = ko.unwrap(value.timeout);
-        var wildcard = ko.unwrap(value.wildcard);
-        var replace = ko.unwrap(value.replace);
-        var rateLimitFn = ko.unwrap(value.rateLimitFn);
-        var rateLimitWait = ko.unwrap(value.rateLimitWait);
-        var maxParallelRequests = ko.unwrap(value.maxParallelRequests);
-        var beforeSend = ko.unwrap(value.beforeSend);
-        var computedFunction = ko.unwrap(value.computedFunction);
-        var onAutoCompleted = ko.unwrap(value.onAutoCompleted);
-        var onNoneItemSelected = ko.unwrap(value.onNoneItemSelected);
-        var options = {};
-        if (name) options.name = name;
-        if (valueKey) options.valueKey = valueKey;
-        if (nameKey) options.nameKey = nameKey;
-        if (limit) options.limit = limit;
-        if (minLength) options.minLength = minLength;
-        if (templateElement) options.template = $(templateElement).html();
-		else if (template) options.template = template;
-        if (engine) options.engine = engine;
-        if (header) options.header = header;
-        if (footer) options.footer = footer;
-        if (local) options.local = local;
-        if (prefetch) {
-            var prefOptions = {};
-            if (typeof prefetch == "string" || (typeof prefetch == "object" && prefetch.constructor === String))
-                prefOptions.url = prefetch;
-			else if (typeof prefetch == 'object') {
-                var lurl = ko.unwrap(prefetch.url);
-                var lttl = ko.unwrap(prefetch.ttl);
-                var lfilter = ko.unwrap(prefetch.filter);
-                if (lurl) prefOptions.url = url;
-                if (lttl) prefOptions.ttl = ttl;
-                if (lfilter) prefOptions.filter = filter;
+//The purpose of this function is to groome dataset as Datum dataset
+//It is run for local data and as a filter function on remote data.  If remot data contains filter it is run before grooming takes place
+ko.typeaheadPreFilter = function (data, tokenFields, valueFields, valueKey, nameKey, filterFn) {
+    var dd;
+    var d;
+    if (filterFn && typeof filterFn == 'function') {
+        dd = filterFn(data);
+        d = ko.unwrap(dd);
+    } else
+        d = ko.unwrap(data);
+    var newData = [];
+    if (d) {
+        for (var i = 0; i < d.length; i++)
+            newData.push(ko.typeaheadDatumGenerate(d[i], tokenFields, valueFields, valueKey, nameKey));
+    }
+    return newData;
+};
+ko.bindingHandlers.typeahead = {
+    update: function (element, valueAccessor, allBindingsAccessor, viewModel, bindingContext) {
+        var values = valueAccessor();
+        var key = ko.unwrap(values.valueKey);
+        var nameKey = ko.unwrap(values.nameKey);
+        var tokenFields = ko.unwrap(values.tokenFields);
+        var valueFields = ko.unwrap(values.valueFields);
+        if (values.hasOwnProperty('selectedDatum')) {
+            if (element && typeof $(element).typeahead == 'function') {
+                var data = ko.unwrap(values.selectedDatum);
+                var datum = ko.typeaheadDatumGenerate(data, tokenFields, valueFields, key, nameKey);
+                var currDatum = $(element).typeahead('getDatum');
+                if (currDatum && data && key) {
+                    if (currDatum[key] != datum[key])
+                        $(element).typeahead('setDatum', datum);
+				else {
+                        if ($(element).val() != datum[nameKey])
+                            $(element).val(datum[nameKey]);
+                    }
+                } else if (currDatum || datum)
+                    $(element).typeahead('setDatum', datum);
             }
-            if (url && !prefOptions.url) prefOptions.url = url;
-            if (ttl && !prefOptions.ttl) prefOptions.ttl = ttl;
-            if (filter && !prefOptions.filter) prefOptions.filter = filter;
-            options.prefetch = prefOptions;
         }
-        if (remote) {
-            var remoteOptions = {};
-            if (typeof remote == "string" || (typeof remote == "object" && remote.constructor === String))
-                remoteOptions.url = remote;
+    },
+    init: function (element, valueAccessor, allBindingsAccessor, viewModel, bindingContext) {
+        var val = valueAccessor();
+        if (!$.isArray(val)) {
+            val = [val];
+        }
+        var opts = [];
+        var selectedDatum, onAutoCompleted, onSelected, onOpened, onClosed, onInitialized;
+        var alen = val.length;
+        for (var i = 0; i < alen; i++) {
+            value = val[i];
+            var value = valueAccessor();
+            var name = ko.unwrap(value.name);
+            var minLength = ko.unwrap(value.minLength);
+            var valueKey = ko.unwrap(value.valueKey);
+            var nameKey = ko.unwrap(value.nameKey);
+            var cacheKey = ko.unwrap(value.cacheKey);
+            var recalcSuggestions = ko.unwrap(value.recalcSuggestions);
+            var limit = ko.unwrap(value.limit);
+            var template = ko.unwrap(value.template);
+            var templateElement = ko.unwrap(value.templateElement);
+            var tokenFields = ko.unwrap(value.tokenFields);
+            var valueFields = ko.unwrap(value.valueFields);
+            var engine = ko.unwrap(value.engine);
+            var header = ko.unwrap(value.header);
+            var footer = ko.unwrap(value.footer);
+            var local = ko.unwrap(value.local);
+            var prefetch = ko.unwrap(value.prefetch);
+            var remote = ko.unwrap(value.remote);
+
+            //We also allow remote and prefetch options to be defined globally (more conveinient if you are only using one of them at a time)
+            var url = ko.unwrap(value.url);
+            var ttl = ko.unwrap(value.ttl);
+            var filter = ko.unwrap(value.filter);
+            var dataType = ko.unwrap(value.dataType);
+            var cache = ko.unwrap(value.cache);
+            var timeout = ko.unwrap(value.timeout);
+            var wildcard = ko.unwrap(value.wildcard);
+            var replace = ko.unwrap(value.replace);
+            var rateLimitFn = ko.unwrap(value.rateLimitFn);
+            var rateLimitWait = ko.unwrap(value.rateLimitWait);
+            var maxParallelRequests = ko.unwrap(value.maxParallelRequests);
+            var beforeSend = ko.unwrap(value.beforeSend);
+            var handler = ko.unwrap(value.handler);
+            selectedDatum = ko.unwrap(value.selectedDatum);
+            onAutoCompleted = ko.unwrap(value.onAutoCompleted);
+            onSelected = ko.unwrap(value.onSelected);
+            onOpened = ko.unwrap(value.onOpened);
+            onClosed = ko.unwrap(value.onClosed);
+            onInitialized = ko.unwrap(value.onInitialized);
+            var options = {};
+            if (name)
+                options.name = name;
+            if (valueKey)
+                options.valueKey = valueKey;
+            if (nameKey)
+                options.nameKey = nameKey;
+            if (cacheKey)
+                options.cacheKey = cacheKey;
+            if (limit)
+                options.limit = limit;
+            if (minLength)
+                options.minLength = minLength;
+            if (recalcSuggestions)
+                options.recalcSuggestions = recalcSuggestions;
+
+            if (templateElement)
+                options.template = $(templateElement).html();
+			else if (template)
+                options.template = template;
+            if (engine)
+                options.engine = engine;
+            if (header)
+                options.header = header;
+            if (footer)
+                options.footer = footer;
+            if (local)
+                options.local = ko.typeaheadPreFilter(local, tokenFields, valueFields, valueKey, nameKey, filter);
+            if (prefetch) {
+                var lfilter = null;
+                var prefOptions = {};
+                function preFilter(data) {
+                    return ko.typeaheadPreFilter(data, tokenFields, valueFields, valueKey, nameKey, lfilter);
+                }
+                if (typeof prefetch == "string" || (typeof prefetch == "object" && prefetch.constructor === String))
+                    prefOptions.url = prefetch;
+				else if (typeof prefetch == 'object') {
+                    var lurl = ko.unwrap(prefetch.url);
+                    var lttl = ko.unwrap(prefetch.ttl);
+                    lfilter = ko.unwrap(prefetch.filter);
+                    if (lurl)
+                        prefOptions.url = lurl;
+                    if (lttl)
+                        prefOptions.ttl = lttl;
+                    if (filter && !lfilter)
+                        lfilter = filter;
+                }
+
+                if (url && !prefOptions.url)
+                    prefOptions.url = url;
+                if (ttl && !prefOptions.ttl)
+                    prefOptions.ttl = ttl;
+                prefOptions.filter = preFilter;
+                options.prefetch = prefOptions;
+            }
+            if (remote || handler) {
+                var remoteOptions = {};
+                var lfilter = null;
+                if (handler || typeof handler == 'function')
+                    remoteOptions.handler = handler;
+			else if (handler)
+                    remoteOptions.url = handler;
+			else if (typeof remote == 'string' || (typeof remote == 'object' && remote.constructor === String))
+                    remoteOptions.url = remote;
+			else if (typeof remote == 'function')
+                    remoteOptions.handler = remote;
 			else if (typeof remote == 'object') {
-                //Check for local options
-                var lurl = ko.unwrap(remote.url);
-                var ldataType = ko.unwrap(remote.url);
-                var lcache = ko.unwrap(remote.cache);
-                var ltimeout = ko.unwrap(remote.timeout);
-                var lwildcard = ko.unwrap(remote.wildcard);
-                var lreplace = ko.unwrap(remote.replace);
-                var lrateLimitFn = ko.unwrap(remote.rateLimitFn);
-                var lrateLimitWait = ko.unwrap(remote.rateLimitWait);
-                var lmaxParallelRequests = ko.unwrap(remote.maxParallelRequests);
-                var lbeforeSend = ko.unwrap(remote.beforeSend);
-                var lfilter = ko.unwrap(remote.filter);
-                if (lurl) remoteOptions.url = lurl;
-                if (ldataType) remoteOptions.dataType = ldataType;
-                if (lcache) remoteOptions.cache = lcache;
-                if (ltimeout) remoteOptions.timeout = ltimeout;
-                if (lwildcard) remoteOptions.wildcard = lwildcard;
-                if (lreplace) remoteOptions.replace = lreplace;
-                if (lrateLimitFn) remoteOptions.rateLimitFn = lrateLimitFn;
-                if (lrateLimitWait) remoteOptions.rateLimitWait = lrateLimitWait;
-                if (lmaxParallelRequests) remoteOptions.maxParallelRequests = lmaxParallelRequests;
-                if (lbeforeSend) remoteOptions.beforeSend = lbeforeSend;
-                if (lfilter) remoteOptions.filter = lfilter;
+                    //Check for local options
+                    var lurl = ko.unwrap(remote.url);
+                    var lhandler = ko.unwrap(remote.handler);
+                    var ldataType = ko.unwrap(remote.url);
+                    var lcache = ko.unwrap(remote.cache);
+                    var lcacheKey = ko.unwrap(remote.cacheKey);
+                    var ltimeout = ko.unwrap(remote.timeout);
+                    var lwildcard = ko.unwrap(remote.wildcard);
+                    var lreplace = ko.unwrap(remote.replace);
+                    var lrateLimitFn = ko.unwrap(remote.rateLimitFn);
+                    var lrateLimitWait = ko.unwrap(remote.rateLimitWait);
+                    var lmaxParallelRequests = ko.unwrap(remote.maxParallelRequests);
+                    var lbeforeSend = ko.unwrap(remote.beforeSend);
+                    lfilter = ko.unwrap(remote.filter);
+                    if (lurl)
+                        remoteOptions.url = lurl;
+                    if (ldataType)
+                        remoteOptions.dataType = ldataType;
+                    if (lcache)
+                        remoteOptions.cache = lcache;
+                    if (lcache)
+                        remoteOptions.cacheKey = lcacheKey;
+                    if (ltimeout)
+                        remoteOptions.timeout = ltimeout;
+                    if (lwildcard)
+                        remoteOptions.wildcard = lwildcard;
+                    if (lreplace)
+                        remoteOptions.replace = lreplace;
+                    if (lrateLimitFn)
+                        remoteOptions.rateLimitFn = lrateLimitFn;
+                    if (lrateLimitWait)
+                        remoteOptions.rateLimitWait = lrateLimitWait;
+                    if (lmaxParallelRequests)
+                        remoteOptions.maxParallelRequests = lmaxParallelRequests;
+                    if (lbeforeSend)
+                        remoteOptions.beforeSend = lbeforeSend;
+                    if (filter && !lfilter)
+                        lfilter = filter;
+                }
+                function remFilter(data) {
+                    return ko.typeaheadPreFilter(data, tokenFields, valueFields, valueKey, nameKey, lfilter);
+                }
+
+                if (url && !remoteOptions.url)
+                    remoteOptions.url = url;
+                if (handler && !remoteOptions.handler)
+                    remoteOptions.handler = handler;
+                if (dataType && !remoteOptions.url)
+                    remoteOptions.dataType = dataType;
+                if (cache && !remoteOptions.url)
+                    remoteOptions.cache = cache;
+                if (cacheKey && !remoteOptions.cacheKey)
+                    remoteOptions.cacheKey = cacheKey;
+                if (timeout && !remoteOptions.timeout)
+                    remoteOptions.timeout = timeout;
+                if (wildcard && !remoteOptions.wildcard)
+                    remoteOptions.wildcard = wildcard;
+                if (replace && !remoteOptions.replace)
+                    remoteOptions.replace = replace;
+                if (rateLimitFn && !remoteOptions.rateLimitFn)
+                    remoteOptions.rateLimitFn = rateLimitFn;
+                if (rateLimitWait && !remoteOptions.rateLimitWait)
+                    remoteOptions.rateLimitWait = rateLimitWait;
+                if (maxParallelRequests && !remoteOptions.maxPerallelRequests)
+                    remoteOptions.maxParallelRequests = maxParallelRequests;
+                if (beforeSend && !remoteOptions.beforeSend)
+                    remoteOptions.beforeSend = beforeSend;
+                remoteOptions.filter = remFilter;
+                options.remote = remoteOptions;
             }
-            if (url && !remoteOptions.url) remoteOptions.url = url;
-            if (dataType && !remoteOptions.url) remoteOptions.dataType = dataType;
-            if (cache && !remoteOptions.url) remoteOptions.cache = cache;
-            if (timeout && !remoteOptions.timeout)  remoteOptions.timeout = timeout;
-            if (wildcard && !remoteOptions.wildcard) remoteOptions.wildcard = wildcard;
-            if (replace && !remoteOptions.replace) remoteOptions.replace = replace;
-            if (rateLimitFn && !remoteOptions.rateLimitFn) remoteOptions.rateLimitFn = rateLimitFn;
-            if (rateLimitWait && !remoteOptions.rateLimitWait) remoteOptions.rateLimitWait = rateLimitWait;
-            if (maxParallelRequests && !remoteOptions.maxPerallelRequests) remoteOptions.maxParallelRequests = maxParallelRequests;
-            if (beforeSend && !remoteOptions.beforeSend) remoteOptions.beforeSend = beforeSend;
-            if (filter && !remoteOptions.filter) remoteOptions.filter = filter;
-            options.remote = remoteOptions;
-        }
-        if (computed || computedFunction) {
-            var computedOptions = {};
-            if (computed && typeof computed == 'function')
-                computedOptions.computedFunction = computed;
-				else if (computed && typeof computed == 'object') {
-                var lcomputedFunction = ko.unwrap(computed.computedFunction);
-                var ldataType = ko.unwrap(computed.dataType);
-                var lrateLimitFn = ko.unwrap(computed.rateLimitFn);
-                var lrateLimitWait = ko.unwrap(computed.rateLimitWait);
-                var lmaxParallelRequests = ko.unwrap(computed.maxParallelRequests);
-                var lfilter = ko.unwrap(computed.filter);
-                if (lcomputedFunction) computedOptions.computedFunction = lcomputedFunction;
-                if (ldataType) computedOptions.dataType = ldataType;
-                if (lrateLimitFn) computedOptions.rateLimitFn = lrateLimitFn;
-                if (lrateLimitWait) computedOptions.rateLimitWait = lrateLimitWait;
-                if (lmaxParallelRequests) computedOptions.maxParallelRequests = lmaxParallelRequests;
-                if (lfilter) computedOptions.filter = lfilter;
-            }
-            if (computedFunction && !computedOptions.computedFunction) computedOptions.computedFunction = computedFunction;
-            if (dataType && !computedOptions.dataType) computedOptions.dataType = dataType;
-            if (rateLimitFn && !computedOptions.rateLimitFn) computedOptions.rateLimitFn = rateLimitFn;
-            if (rateLimitWait && !computedOptions.rateLimitWait) computedOptions.rateLimitWait = rateLimitWait;
-            if (maxParallelRequests && !computedOptions.maxParallelRequests) computedOptions.maxParallelRequests = maxParallelRequests;
-            if (filter && !computedOptions.filter) computedOptions.filter = filter;
-            options.computed = computedOptions;
+
+            if (!name)
+                options.name = element.id;
+
+            if (options.template && !options.engine && Hogan)
+                options.engine = Hogan;
+            opts.push(options);
         }
         $(element).attr('autocomplete', 'off');
-        if (options.template && !options.engine && Hogan) options.engine = Hogan;
-        $(element).typeahead(options);
-        if (onAutoCompleted) $(element).on('typeahead:selected typeahead:autocompleted', value.onAutoCompleted);
-        if (onNoneItemSelected) $(element).on('change', onNoneItemSelected);
+        $(element).typeahead(opts);
+        if (onAutoCompleted)
+            $(element).on('typeahead:autocompleted', onAutoCompleted);
+        if (onSelected)
+            $(element).on('typeahead:selected', onSelected);
+        if (onOpened)
+            $(element).on('typeahead:opened', onOpened);
+        if (onClosed)
+            $(element).on('typeahead:closed', onClosed);
+        if (onInitialized)
+            $(element).on('typeahead:initialized', onInitialized);
+        if (selectedDatum) {
+            $(element).on('typeahead:autocompleted', function (e, datum) {
+                onSelectedDatum(valueAccessor(), datum);
+            });
+            $(element).on('typeahead:selected', function (e, datum) {
+                onSelectedDatum(valueAccessor(), datum);
+            });
+        }
+        function onSelectedDatum(updateValue, datum) {
+            if (updateValue.selectedDatum && datum && datum.hasOwnProperty('data'))
+                updateValue.selectedDatum(datum.data);
+        }
     }
 };

@@ -74,18 +74,42 @@ $('input.twitter-search').typeahead([
 
 Destroys previously initialized typeaheads. This entails reverting DOM modifications and removing event handlers.
 
-```javascript
+**javascript**
+```
 $('input.typeahead-devs').typeahead({
   name: 'accounts',
   local: ['timtrueman', 'JakeHarding', 'vskarich']
-});
+});```
+```$('input.typeahead-devs').typeahead('destroy');```
 
-$('input.typeahead-devs').typeahead('destroy');
-```
 
 #### jQuery#typeahead('setQuery', query)
 
-Sets the current query of the typeahead. This is always preferable to using `$("input.typeahead").val(query)`, which will result in unexpected behavior. To clear the query, simply set it to an empty string.
+Sets the current query of the typeahead. This is always preferable to using `$("input.typeahead").val(query)`, which will result in unexpected behavior. To clear the query, simply set it to an empty string.  
+ *If you are using `remote` data and want to initialize the typeahead value with some value, you need to call this method.*  
+**Example:**  `$('#MyInputBoxId').typeahead('setQuery','hello');`
+
+#### jQuery#typeahead('setDatum', datum)
+
+Sets the selected datum object of the typeahead. *If you are using `remote` data and want to initialize the typeahead value with some datum, you need to call this method.*  
+**Example:**  `$('#MyInputBoxId').typeahead('setDatum', myDatum);`
+
+#### jQuery#typeahead('getDatum') 
+Returns the datum object from the last selected or autocompleted data in the control.
+**Example:** `var myDatum = $('#MyInputBoxId').typeahead('getDatum');`
+
+#### jQuery#typeahead('clearCache')
+
+Clears the current cache of the typeahead.  In most cases this is not needed.  However if you are reusing the page with different data and cache keys (for instance in SPA application), it may be preferable to clear the cache to reduce the memory footprint of the application.  This method may also be used instead of using varying `cacheKey`'s for remote data.  
+**Example:** `$('#MyInputBoxId').typeahead('clearCache');`
+
+#### jQuery#typeahead('openDropdown')
+Opens the dropdown on the relevant element (only if it has suggestions)  
+**Example:** `$('#MyInputBoxId').typeahead('openDropdown');`
+
+#### jQuery#typeahead('closeDropdown')
+Closes the dropdown on the relevant element.
+**Example:** `$('#MyInputBoxId').typeahead('closeDropdown');`
 
 ### Dataset
 
@@ -97,7 +121,7 @@ When defining a dataset, the following options are available:
 
 * `valueKey` – The key used to access the value of the datum in the datum object. Defaults to `value`.  
 
-* `nameKey` – If the input display name name should be other than the unique value, then this is the name of the datum in the datum object. Defaults to `value` or the value of the valueKey.
+* `nameKey` – If the input display name should be other than the unique value, then this is the name of the datum in the datum object. Defaults to `value` or the value of the `valueKey` .
 
 * `limit` – The max number of suggestions from the dataset to display for a given query. Defaults to `5`.
 
@@ -115,7 +139,8 @@ When defining a dataset, the following options are available:
 
 * `prefetch` – Can be a URL to a JSON file containing an array of datums or, if more configurability is needed, a [prefetch options object][prefetch].
 
-* `remote` – Can be a URL to fetch suggestions from when the data provided by `local` and `prefetch` is insufficient or, if more configurability is needed, a [remote options object][remote].
+* `remote` – Can be a URL or handler function to fetch suggestions from when the data provided by `local` and `prefetch` is insufficient or, if more configurability is needed. See [remote options object][remote] for details.
+
 
 ### Datum
 
@@ -165,17 +190,28 @@ Remote data is only used when the data provided by `local` and `prefetch` is ins
 
 When configuring `remote`, the following options are available:
 
-* `url` – A URL to make requests to when when the data provided by `local` and `prefetch` is insufficient. **Required.**
+* `url` – A URL to make requests to when  the data provided by `local` and `prefetch` is insufficient.  **`url` or `handler` options are required for remote lookups.**
 
-* `dataType` – The type of data you're expecting from the server. See the [jQuery.ajax docs][jquery-ajax] for more info. Defaults to `json`.
+* `handler` - Custom function with the signature `function(query, data)` to take control of the typeahead data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source using the **promise pattern**.    
+In case this function is used for asynchronous data fetch it must return `promise`, but it should return `true` for synchronous operations.  Both [JQuery promises](http://api.jquery.com/promise/ "Jquery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.  
+When `handler` option is used for data retrieval the options `beforeSend`, `replace`, `wildcard`, `dataType` and  `cache` do not apply.  However the throttling options are used and the cache control is also functioning.
+See [this page](Computed.md) for details on the handler usage.
 
-* `cache` – Determines whether or not JQuery will cache responses. See the [jQuery.ajax docs][jquery-ajax] for more info.  Note however that by default all remote responses are cached for each query.
+* `dataType` – The type of data you're expecting from the server. See the [jQuery.ajax docs][jquery-ajax] for more info. Defaults to `json`.  This applies only in conjunction with the `url` option.
 
-* `timeout` – Sets a timeout for requests. See the [jQuery.ajax docs][jquery-ajax] for more info.
+* `cache` – Determines whether or not JQuery will cache responses. See the [jQuery.ajax docs][jquery-ajax] for more info.  This applies only for the `url` option, by default all remote responses are cached for each query.
 
-* `wildcard` – The pattern in `url` that will be replaced with the user's query when a request is made. Defaults to `%QUERY`.
+* `skipCache` – Orders remote queries not to use local cache but allways refetch data on each keystroke.  This can be useful for mutating remote data.
 
-* `replace` – A function with the signature `replace(url, uriEncodedQuery)` that can be used to override the request URL. Expected to return a valid URL. If set, no wildcard substitution will be performed on `url`.
+* `cacheKey` –  By default all remote lookups are cached per string combination entered in the typeahead control. This option can be used to control caching which may be necessary if more than one typeahead control is used in the application. By default this value is set to the `url` value for **url** requests and the `name` value for **handler** requests.  
+This option value may also be set to function with the signature function(query).  It must then return cache key including the query value.  This function method may be particularly helpful when using handler functions for remote lookup where results may be varying on different contexts.  
+**Example:**  `cacheKey: function(query) { return 'admin1_#' + vm.country + '_%' + query;}`
+
+* `timeout` – Sets a timeout for requests. See the [jQuery.ajax docs][jquery-ajax] for more info.  This applies only in conjunction with the `url` option.
+
+* `wildcard` – The pattern in `url` that will be replaced with the user's query when a request is made. Defaults to `%QUERY`.  This applies only in conjunction with the `url` option.
+
+* `replace` – A function with the signature `replace(url, uriEncodedQuery)` that can be used to override the request URL. Expected to return a valid URL. If set, no wildcard substitution will be performed on `url`.  This applies only in conjunction with the `url` option.
 
 * `rateLimitFn` – The function used for rate-limiting network requests. Can be either `debounce` or `throttle`. Defaults to `debounce`.
 
@@ -183,26 +219,9 @@ When configuring `remote`, the following options are available:
 
 * `maxParallelRequests` – The max number of parallel requests typeahead.js can have pending. Defaults to `6`.
 
-* `beforeSend` – A pre-request callback with the signature `beforeSend(jqXhr, settings)`. Can be used to set custom headers. See the [jQuery.ajax docs][jquery-ajax] for more info.
+* `beforeSend` – A pre-request callback with the signature `beforeSend(jqXhr, settings)`. Can be used to set custom headers. See the [jQuery.ajax docs][jquery-ajax] for more info.  This applies only in conjunction with the `url` option.
 
 * `filter` – A function with the signature `filter(parsedResponse)` that transforms the response body into an array of datums. Expected to return an array of datums.
-
-### Computed
-Computed data is used in similar way as Remote data is.  The difference between those two is that while Remote handles direct Ajax request to get the data, Computed uses custom function specified by the user.  
-
-* `computedFunction` - Custom function with the signature `function(query, data)` to take control of the typeahead data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source.    
-In case this function is used for asynchronous data fetch it must return promise.  Both [JQuery promises](http://api.jquery.com/promise/ "Jquery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.  **Required.**
-
-* `rateLimitFn` – The function used for rate-limiting network requests. Can be either debounce or throttle. Defaults to debounce.
-
-* `rateLimitWait` – The time interval in milliseconds that will be used by rateLimitFn. Defaults to 300.
-
-* `maxParallelRequests` – The max number of parallel requests typeahead.js can have pending. Defaults to 6.
-
-* `filter` – A function with the signature filter(parsedResponse) that transforms the response body into an array of datums. Expected to return an array of datums.  
-
-See [this page](Cmputed.md) for details
-
 
 
 ### Custom Events
@@ -217,9 +236,21 @@ typeahead.js triggers the following custom events:
 
 * `typeahead:selected` – Triggered when a suggestion from the dropdown menu is explicitly selected. The datum for the selected suggestion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
 
-* `typeahead:autocompleted` – Triggered when the query is autocompleted. The datum used for autocompletion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
+* `typeahead:autocompleted` – Triggered when the query is autocompleted. The datum used for auto completion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
 
 All custom events are triggered on the element initialized as a typeahead.
+
+You can use JQuery to hook the custom events to your handling functions.  
+**Example:**  
+```
+$(´#yourElementIdWithHash´.on('typeahead:selected', yourSelectedEfentHanlerFunction); 
+```
+where the handler function has this format:
+``function yourSelectedEventHanlerFunction(element,datum) {``  
+   Datum contains here the info about the cell you selected.   
+   Element is the input box element.
+``}``
+
 
 ### Template Engine Compatibility
 
@@ -268,10 +299,14 @@ For simple autocomplete use cases, the typeahead component [Bootstrap][bootstrap
 * If you're customizing Bootstrap, exclude the typeahead component. If you're depending on the standard *bootstrap.js*, ensure *typeahead.js* is loaded after it.
 * The DOM structure of the dropdown menu used by typeahead.js differs from the DOM structure of the Bootstrap dropdown menu. You'll need to load some [additional CSS][typeahead.js-bootstrap.css] in order to get the typeahead.js dropdown menu to fit the default Bootstrap theme.
 
-Knockout Intergration
+Knockout Integration
 ---------------------
 Knockout binding handler for this library is provided.  
 See [this page](Knockout.md) for details.
+
+Side Effects
+---------------
+The input box background styling is overwritten by the control.
 
 Browser Support
 ---------------
@@ -383,4 +418,4 @@ Licensed under the MIT License
 [jquery-ajax]: http://api.jquery.com/jQuery.ajax/
 [hogan.js]: http://twitter.github.com/hogan.js/
 [bootstrap]: http://twitter.github.com/bootstrap/
-[typeahead.js-bootstrap.css]: https://github.com/jharding/typeahead.js-bootstrap.css
+[typeahead.js-bootstrap.css]: https://github.com/jharding/typeahead.js-bootstrap.css.
