@@ -91,7 +91,7 @@ Sets the current query of the typeahead. This is always preferable to using `$("
 
 #### jQuery#typeahead('setDatum', datum)
 
-Sets the selected datum object of the typeahead. *If you are using `remote` data and want to initialize the typeahead value with some datum, you need to call this method.*  
+Sets the selected datum object of the typeahead. *If you are using `remote` data and want to initialize the typeahead value with some datum, you need to call this method.*  This method is preferred for initialization over the setQuery method, especially if the `restrictInputToDatum` option is used.  
 **Example:**  `$('#MyInputBoxId').typeahead('setDatum', myDatum);`
 
 #### jQuery#typeahead('getDatum') 
@@ -130,6 +130,13 @@ When defining a dataset, the following options are available:
 * `template` – The template used to render suggestions. Can be a string or a precompiled template. If not provided, suggestions will render as their value contained in a `<p>` element (i.e. `<p>value</p>`).
 
 * `engine` – The template engine used to compile/render `template` if it is a string. Any engine can use used as long as it adheres to the [expected API][template-engine-compatibility]. **Required** if `template` is a string.
+
+* `restrictInputToDatum` – This option will make sure the user can only leave the input box with blank text or text that exists in the nameKey field of the Datum.     
+When user leaves the input box one of these following things will happen:  
+**a)** *If the text is blank, the selected event returning null datum will be razed.  The method getDatum will return null if called.*  
+**b)** *If the user never selected or autocompleted suggestion and it was not initialized with the setDatum mehtod, the text and the selectedDatum will be set to ''.  The method getDatum will return null if called.*  
+**c)** *If the user initialized (with setDatum), selected or autocompleted suggestion and did not change the text after that, nothing happens.  The method getDatum will return the corresponding datum.*  
+**d)** *If the user initialized (with setDatum), selected or autocompleted suggestion and then changed the text without autocompleting or selecting, the text will be set to the value of the last initialized, autocompleted or selected datum.  The method getDatum will return the corresponding datum.*   
 
 * `header` – The header rendered before suggestions in the dropdown menu. Can be either a DOM element or HTML.
 

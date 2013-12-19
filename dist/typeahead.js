@@ -1,15 +1,25 @@
 /*!
- * typeahead.js 0.9.4
+ * typeahead.js 0.9.4  Svakinn: perhaps the many changes here deserve a new version number - of course few comments need to be removed before this code is released
+ * Besides few bugfixes the major issues changed are following
+ * Remote handler functionality (handling function option instead of ajax) still allowing for throttling and cache, supports JQuery and Q promises
+ * Remote cashing control: user can skip caching, define caching key and even caching key function 
+ * Optional handling for restricting selection to the set of Datums provided (restrictInputToDatum)
+ * Introduction of name/key values: data key may differ from the display name
+ * Maintaining the concept of selected datum, updated on autocomplete or selection
+ * New typeahead interface methods: getDatum, setDatum, clearCache, openDropdown and closeDropdown
+ * Accompanying this update is a Knockout binding handler that greatly simplifies the work of initialization, auto-Datum creation and two-way databinding to selected Datum
+ * See updated Readme.md and the new Handler.md and Knockout.md for details.
+ * Credits for this update:  nathankoop and bowser project for the IE11 detection, zhigang1992 for the restrictInputToDatum option, cusspvz for the handler name, adanaltamira for minLength documentation, and last but not least
+ * ryanpitts for the idea and implementation of the nameKey option.
  * https://github.com/twitter/typeahead
  * Copyright 2013 Twitter, Inc. and other contributors; Licensed MIT
  */
 
 (function ($) {
-    var VERSION = "0.9.3";
+    var VERSION = "0.9.4"; 
     var utils = {
         isMsie: function () {
-            //var match = /(msie) ([\w.]+)/i.exec(navigator.userAgent);
-            //return match ? parseInt(match[2], 10) : false;
+            //Improved IE11 detection (borrowed from the bowser Github project: https://github.com/ded/bowser)
             return /(msie|trident)/i.test(navigator.userAgent) ? navigator.userAgent.match(/(msie |rv:)(\d+(.\d+)?)/i)[2] : false;
         },
         isBlankString: function (str) {
@@ -310,6 +320,7 @@
             this.replace = o.replace;
             this.name = o.name;
             this.cacheKey = o.cacheKey;
+            this.skipCache = o.skipCache;
             if (this.url) {
                 this.ajaxSettings = {
                     type: "get",
@@ -338,7 +349,7 @@
                 function done(resp) {
                     var data = that.filter ? that.filter(resp) : resp;
                     cb && cb(data);
-                    requestCache.set(cacheKey, resp);
+                    this.skipCache || requestCache.set(cacheKey, resp);
                 }
             },
             _sendRequest: function (url, data) {
@@ -371,7 +382,7 @@
                     cacheKey = this.cacheKey(query);
                 else
                     cacheKey = this.cacheKey ? this.cacheKey + '%_' + query : url;
-                if (resp = requestCache.get(cacheKey)) {
+                if (!this.skipCache && (resp = requestCache.get(cacheKey))) {
                     utils.defer(function () {
                         cb(that.filter ? that.filter(resp) : resp);
                     });
@@ -381,7 +392,7 @@
                 return !!resp;
             },
             clearCache: function () {
-                requestCache.clear();
+                this.skipCache || requestCache.clear();
             }
         });
         return Transport;
@@ -418,6 +429,7 @@
             this.valueKey = o.valueKey || "value";
             this.nameKey = o.nameKey || this.valueKey;
             this.cacheKey = o.cacheKey;
+            this.restrictInputToDatum = o.restrictInputToDatum; //The behavior to clear input value on leaving the box if it does not contain selected datum and if it dos reset the value to last selected datum name
             this.template = compileTemplate(o.template, o.engine, this.nameKey);
             this.local = o.local;
             this.prefetch = o.prefetch;
@@ -623,11 +635,11 @@
         }
         utils.mixin(InputView.prototype, EventTarget, {
             _handleFocus: function () {
-                console.log('handle trigger focus');
+                //console.log('handle trigger focus');
                 this.trigger("focused");
             },
             _handleBlur: function () {
-                console.log('handle trigger blured');
+                //console.log('handle trigger blured');
                 this.trigger("blured");
             },
             _handleSpecialKeyEvent: function ($e) {
@@ -756,6 +768,7 @@
             },
             _handleSelection: function ($e) {
                 var $suggestion = $($e.currentTarget);
+                $e.preventDefault(); //try to stop click on item to trigger blur/focus on the input view
                 this.trigger("suggestionSelected", extractSuggestion($suggestion));
             },
             _show: function () {
@@ -944,6 +957,7 @@
             this.hasRemote = false;
             this.nameKey = null;
             this.valueKey = null;
+            this.restrictInputToDatum = null;
             if (this.datasets && this.datasets.length > 0) {
                 for (var i = 0; i < this.datasets.length; i++) {
                     if (this.datasets[i].isRemote)
@@ -952,6 +966,8 @@
                         this.nameKey = this.datasets[i]['nameKey'];
                     if (!this.valueKey && this.datasets[i]['valueKey'])
                         this.valueKey = this.datasets[i]['valueKey'];
+                    if (!this.restrictInputToDatum && this.datasets[i]['restrictInputToDatum'])
+                        this.restrictInputToDatum = this.datasets[i]['restrictInputToDatum'];
                 }
             }
             $menu = this.$node.find(".tt-dropdown-menu");
@@ -984,7 +1000,21 @@
                 preventDefault && $e.preventDefault();
             },
             _manageLeaving: function (e) {
-                console.log('Leaving');
+                //console.log('Leaving');
+                if (this.restrictInputToDatum) {
+                    var inputValue = this.inputView.getInputValue();
+                    //To allow user to select nothing we nullify the datum if the input string is empty
+                    if (inputValue === null || inputValue.length == 0 && this.selectedDatum) {
+                        this.setDatum(null);
+                        this.eventBus.trigger("selected", null, null); //TTrigger event for databinding since user is deliberatly selecting empty value
+                    }
+                    else if (!this.selectedDatum) {
+                        if (inputValue === null || inputValue.length > 0)
+                            this.inputView.setInputValue('', true);
+                    }
+                    else if (this.selectedDatum[this.nameKey] != inputValue)
+                        this.inputView.setInputValue(this.selectedDatum[this.nameKey], true);
+                }
             },
             _setLanguageDirection: function () {
                 var dir = this.inputView.getLanguageDirection();
@@ -1035,7 +1065,10 @@
                 if (suggestion) {
                     this.inputView.setInputValue(suggestion.name);
                     this.selectedDatum = suggestion.datum;
-                    console.log('Suggestion: ' + suggestion.name);
+                    //console.log('Suggestion: ' + suggestion.name);
+                    //If user clicked dropdown item we already have blurevent occurance on the input box.
+                    //This is not ideal since blur event on the input box can not be trusted to mark user leaving the box
+                    //The quick fix here is to refocus it, what about issuing deferred tab in the process to leave the field ?
                     byClick ? this.inputView.focus() : e.data.preventDefault();
                     byClick && utils.isMsie() ? utils.defer(this.dropdownView.close) : this.dropdownView.close();
                     this.eventBus.trigger("selected", suggestion.datum, suggestion.dataset);
@@ -1067,7 +1100,7 @@
                 hint = this.inputView.getHintValue();
                 if (hint !== "" && query !== hint) {
                     suggestion = this.dropdownView.getFirstSuggestion();
-                    console.log('autocomplete: ' + suggestion.name);
+                    //console.log('autocomplete: ' + suggestion.name);
                     this.selectedDatum = suggestion.datum;
                     this.inputView.setInputValue(suggestion.name);
                     this.eventBus.trigger("autocompleted", suggestion.datum, suggestion.dataset);

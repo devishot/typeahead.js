@@ -1,3 +1,4 @@
+
 //Generate datum object for typeahead, based on data record.
 //If you need tokens other than for the nameKey and valueKey then you specify those in comma seporated string (tokenFields)
 //If you need unwraped fields in the datum (i.e. for use in the hogan template engine) you specify those in comma seporated string (valueFields)
@@ -60,6 +61,7 @@ ko.typeaheadPreFilter = function (data, tokenFields, valueFields, valueKey, name
 };
 ko.bindingHandlers.typeahead = {
     update: function (element, valueAccessor, allBindingsAccessor, viewModel, bindingContext) {
+        //var allBindings = allBindingsAccessor();
         var values = valueAccessor();
         var key = ko.unwrap(values.valueKey);
         var nameKey = ko.unwrap(values.nameKey);
@@ -73,7 +75,7 @@ ko.bindingHandlers.typeahead = {
                 if (currDatum && data && key) {
                     if (currDatum[key] != datum[key])
                         $(element).typeahead('setDatum', datum);
-				else {
+                    else {
                         if ($(element).val() != datum[nameKey])
                             $(element).val(datum[nameKey]);
                     }
@@ -98,8 +100,9 @@ ko.bindingHandlers.typeahead = {
             var valueKey = ko.unwrap(value.valueKey);
             var nameKey = ko.unwrap(value.nameKey);
             var cacheKey = ko.unwrap(value.cacheKey);
-            var recalcSuggestions = ko.unwrap(value.recalcSuggestions);
+            var skipCache = ko.unwrap(value.skipCache);
             var limit = ko.unwrap(value.limit);
+            var restrictInputToDatum = ko.unwrap(value.restrictInputToDatum);
             var template = ko.unwrap(value.template);
             var templateElement = ko.unwrap(value.templateElement);
             var tokenFields = ko.unwrap(value.tokenFields);
@@ -138,18 +141,18 @@ ko.bindingHandlers.typeahead = {
                 options.valueKey = valueKey;
             if (nameKey)
                 options.nameKey = nameKey;
+            if (restrictInputToDatum)
+                options.restrictInputToDatum = true;
             if (cacheKey)
                 options.cacheKey = cacheKey;
             if (limit)
                 options.limit = limit;
             if (minLength)
                 options.minLength = minLength;
-            if (recalcSuggestions)
-                options.recalcSuggestions = recalcSuggestions;
 
             if (templateElement)
                 options.template = $(templateElement).html();
-			else if (template)
+            else if (template)
                 options.template = template;
             if (engine)
                 options.engine = engine;
@@ -167,7 +170,7 @@ ko.bindingHandlers.typeahead = {
                 }
                 if (typeof prefetch == "string" || (typeof prefetch == "object" && prefetch.constructor === String))
                     prefOptions.url = prefetch;
-				else if (typeof prefetch == 'object') {
+                else if (typeof prefetch == 'object') {
                     var lurl = ko.unwrap(prefetch.url);
                     var lttl = ko.unwrap(prefetch.ttl);
                     lfilter = ko.unwrap(prefetch.filter);
@@ -189,21 +192,22 @@ ko.bindingHandlers.typeahead = {
             if (remote || handler) {
                 var remoteOptions = {};
                 var lfilter = null;
-                if (handler || typeof handler == 'function')
-                    remoteOptions.handler = handler;
-			else if (handler)
-                    remoteOptions.url = handler;
-			else if (typeof remote == 'string' || (typeof remote == 'object' && remote.constructor === String))
-                    remoteOptions.url = remote;
-			else if (typeof remote == 'function')
+                if (remote && typeof remote == 'function')
                     remoteOptions.handler = remote;
-			else if (typeof remote == 'object') {
+                else if (handler || typeof handler == 'function')
+                    remoteOptions.handler = handler;
+                else if (handler)
+                    remoteOptions.url = handler;
+                else if (typeof remote == 'string' || (typeof remote == 'object' && remote.constructor === String))
+                    remoteOptions.url = remote;
+                else if (typeof remote == 'object') {
                     //Check for local options
                     var lurl = ko.unwrap(remote.url);
                     var lhandler = ko.unwrap(remote.handler);
                     var ldataType = ko.unwrap(remote.url);
                     var lcache = ko.unwrap(remote.cache);
                     var lcacheKey = ko.unwrap(remote.cacheKey);
+                    var lskipCache = ko.unwrap(remote.skipCache);
                     var ltimeout = ko.unwrap(remote.timeout);
                     var lwildcard = ko.unwrap(remote.wildcard);
                     var lreplace = ko.unwrap(remote.replace);
@@ -220,6 +224,8 @@ ko.bindingHandlers.typeahead = {
                         remoteOptions.cache = lcache;
                     if (lcache)
                         remoteOptions.cacheKey = lcacheKey;
+                    if (lskipCache || lskipCache === false)
+                        remoteOptions.skipCache = lskipCache;
                     if (ltimeout)
                         remoteOptions.timeout = ltimeout;
                     if (lwildcard)
@@ -251,6 +257,8 @@ ko.bindingHandlers.typeahead = {
                     remoteOptions.cache = cache;
                 if (cacheKey && !remoteOptions.cacheKey)
                     remoteOptions.cacheKey = cacheKey;
+                if ((skipCache || skipCache === false) && (!remoteOptions.skipCache && remoteOptions.skipCache !== false))
+                    remoteOptions.skipCache = skipCache;
                 if (timeout && !remoteOptions.timeout)
                     remoteOptions.timeout = timeout;
                 if (wildcard && !remoteOptions.wildcard)
@@ -299,6 +307,8 @@ ko.bindingHandlers.typeahead = {
         function onSelectedDatum(updateValue, datum) {
             if (updateValue.selectedDatum && datum && datum.hasOwnProperty('data'))
                 updateValue.selectedDatum(datum.data);
+            else
+                updateValue.selectedDatum(null);
         }
     }
 };
