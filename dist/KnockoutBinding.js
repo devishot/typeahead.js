@@ -1,4 +1,3 @@
-
 //Generate datum object for typeahead, based on data record.
 //If you need tokens other than for the nameKey and valueKey then you specify those in comma seporated string (tokenFields)
 //If you need unwraped fields in the datum (i.e. for use in the hogan template engine) you specify those in comma seporated string (valueFields)
@@ -8,7 +7,11 @@ ko.typeaheadDatumGenerate = function (data, tokenFields, valueFields, valueKey, 
     if (!data)
         return null;
     valueKey = valueKey || 'value';
+    if (valueKey == 'data')
+        $.error("The name 'data' is reserved by tha bndnghandler and cannot be used as 'valueKey'");
     nameKey = nameKey || 'name';
+    if (nameKey == 'data')
+        $.error("The name 'data' is reserved by tha bndnghandler and cannot be used as 'nameKey'");
     var resObj = {};
     var tokens = [];
     var tokenFld = [];
@@ -22,8 +25,11 @@ ko.typeaheadDatumGenerate = function (data, tokenFields, valueFields, valueKey, 
     resObj[valueKey] = ko.unwrap(data[valueKey]);
     resObj[nameKey] = ko.unwrap(data[nameKey]);
     resObj['data'] = data;
-    for (var i = 0; i < valueFld.length; i++)
+    for (var i = 0; i < valueFld.length; i++) {
+        if (valueFld[i].trim() == 'data')
+            $.error("The name 'data' is reserved by tha bndnghandler and cannot be used in 'valueFields'");
         resObj[valueFld[i].trim()] = ko.unwrap(data[valueFld[i].trim()]);
+    }
     for (var i = 0; i < tokenFld.length; i++)
         if (tokenFld[i].trim()) {
             var val = ko.unwrap(data[tokenFld[i].trim()]);
@@ -75,7 +81,7 @@ ko.bindingHandlers.typeahead = {
                 if (currDatum && data && key) {
                     if (currDatum[key] != datum[key])
                         $(element).typeahead('setDatum', datum);
-                    else {
+else {
                         if ($(element).val() != datum[nameKey])
                             $(element).val(datum[nameKey]);
                     }
@@ -105,8 +111,8 @@ ko.bindingHandlers.typeahead = {
             var restrictInputToDatum = ko.unwrap(value.restrictInputToDatum);
             var template = ko.unwrap(value.template);
             var templateElement = ko.unwrap(value.templateElement);
-            var tokenFields = ko.unwrap(value.tokenFields);
-            var valueFields = ko.unwrap(value.valueFields);
+            var tokenFields = ko.unwrap(value.tokenFields) || '';
+            var valueFields = ko.unwrap(value.valueFields) || '';
             var engine = ko.unwrap(value.engine);
             var header = ko.unwrap(value.header);
             var footer = ko.unwrap(value.footer);
@@ -139,6 +145,8 @@ ko.bindingHandlers.typeahead = {
                 options.name = name;
             if (valueKey)
                 options.valueKey = valueKey;
+            if (!valueKey)
+                $.error("The 'valueKey' opton is requied by this binding handler!");
             if (nameKey)
                 options.nameKey = nameKey;
             if (restrictInputToDatum)
@@ -152,7 +160,7 @@ ko.bindingHandlers.typeahead = {
 
             if (templateElement)
                 options.template = $(templateElement).html();
-            else if (template)
+else if (template)
                 options.template = template;
             if (engine)
                 options.engine = engine;
@@ -170,7 +178,7 @@ ko.bindingHandlers.typeahead = {
                 }
                 if (typeof prefetch == "string" || (typeof prefetch == "object" && prefetch.constructor === String))
                     prefOptions.url = prefetch;
-                else if (typeof prefetch == 'object') {
+else if (typeof prefetch == 'object') {
                     var lurl = ko.unwrap(prefetch.url);
                     var lttl = ko.unwrap(prefetch.ttl);
                     lfilter = ko.unwrap(prefetch.filter);
@@ -194,13 +202,13 @@ ko.bindingHandlers.typeahead = {
                 var lfilter = null;
                 if (remote && typeof remote == 'function')
                     remoteOptions.handler = remote;
-                else if (handler || typeof handler == 'function')
+else if (handler || typeof handler == 'function')
                     remoteOptions.handler = handler;
-                else if (handler)
+else if (handler)
                     remoteOptions.url = handler;
-                else if (typeof remote == 'string' || (typeof remote == 'object' && remote.constructor === String))
+else if (typeof remote == 'string' || (typeof remote == 'object' && remote.constructor === String))
                     remoteOptions.url = remote;
-                else if (typeof remote == 'object') {
+else if (typeof remote == 'object') {
                     //Check for local options
                     var lurl = ko.unwrap(remote.url);
                     var lhandler = ko.unwrap(remote.handler);
@@ -307,7 +315,7 @@ ko.bindingHandlers.typeahead = {
         function onSelectedDatum(updateValue, datum) {
             if (updateValue.selectedDatum && datum && datum.hasOwnProperty('data'))
                 updateValue.selectedDatum(datum.data);
-            else
+else
                 updateValue.selectedDatum(null);
         }
     }
