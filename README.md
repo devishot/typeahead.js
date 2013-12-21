@@ -49,68 +49,95 @@ Usage
 
 Turns any `input[type="text"]` element into a typeahead. `datasets` is expected to be a single [dataset][dataset] or an array of datasets.
 
-```javascript
-// single dataset
-$('input.typeahead-devs').typeahead({
-  name: 'accounts',
-  local: ['timtrueman', 'JakeHarding', 'vskarich']
-});
-
-// multiple datasets
-$('input.twitter-search').typeahead([
-  {
+**javascript**
+    
+    // single dataset
+    $('input.typeahead-devs').typeahead({
+      name: 'accounts',
+      local: ['timtrueman', 'JakeHarding', 'vskarich']
+    });
+    
+    // multiple datasets
+    $('input.twitter-search').typeahead([
+      {
     name: 'accounts',
     prefetch: 'https://twitter.com/network.json',
     remote: 'https://twitter.com/accounts?q=%QUERY'
-  },
-  {
+      },
+      {
     name: 'trends',
     prefetch: 'https://twitter.com/trends.json'
-  }
-]);
-```
+      }
+    ]);
+    
 
 #### jQuery#typeahead('destroy')
 
 Destroys previously initialized typeaheads. This entails reverting DOM modifications and removing event handlers.
 
 **javascript**
-```
-$('input.typeahead-devs').typeahead({
-  name: 'accounts',
-  local: ['timtrueman', 'JakeHarding', 'vskarich']
-});```
-```$('input.typeahead-devs').typeahead('destroy');```
+    
+    $('input.typeahead-devs').typeahead({
+      name: 'accounts',
+      local: ['timtrueman', 'JakeHarding', 'vskarich']
+    });
+    $('input.typeahead-devs').typeahead('destroy');
+    
 
-
-#### jQuery#typeahead('setQuery', query)
+#### jQuery#typeahead('setQuery', query) **>New<**
 
 Sets the current query of the typeahead. This is always preferable to using `$("input.typeahead").val(query)`, which will result in unexpected behavior. To clear the query, simply set it to an empty string.  
  *If you are using `remote` data and want to initialize the typeahead value with some value, you need to call this method.*  
-**Example:**  `$('#MyInputBoxId').typeahead('setQuery','hello');`
+ 
+**Example:**  
+    
+    $('#MyInputBoxId').typeahead('setQuery','hello');
+    
+#### jQuery#typeahead('setDatum', datum) **>New<**
 
-#### jQuery#typeahead('setDatum', datum)
+Sets the selected datum object of the typeahead. *If you are using `remote` data and want to initialize the typeahead value with some datum, you need to call this method.*  This method is preferred for initialization over the ` setQuery ` method, especially if the `restrictInputToDatum` option is used.  
+ 
+**Example:**  
+    
+    $('#MyInputBoxId').typeahead('setDatum', myDatum);
+    
+#### jQuery#typeahead('getDatum')  **>New<**
+Returns the datum object from the last selected or autocompleted data in the control.  
+    
+**Example:** 
+    
+    var myDatum = $('#MyInputBoxId').typeahead('getDatum');
+        
+#### jQuery#typeahead('getQuery')  **>New<**
+Returns the current input control value.      
+**Example:** 
+    
+    var myText = $('#MyInputBoxId').typeahead('getQuery');
+    Still the same value can be acceived via:
+    var myText = $('#MyInputBoxId').val();
+    
+#### jQuery#typeahead('clearCache') **>New<**
 
-Sets the selected datum object of the typeahead. *If you are using `remote` data and want to initialize the typeahead value with some datum, you need to call this method.*  This method is preferred for initialization over the setQuery method, especially if the `restrictInputToDatum` option is used.  
-**Example:**  `$('#MyInputBoxId').typeahead('setDatum', myDatum);`
-
-#### jQuery#typeahead('getDatum') 
-Returns the datum object from the last selected or autocompleted data in the control.
-**Example:** `var myDatum = $('#MyInputBoxId').typeahead('getDatum');`
-
-#### jQuery#typeahead('clearCache')
-
-Clears the current cache of the typeahead.  In most cases this is not needed.  However if you are reusing the page with different data and cache keys (for instance in SPA application), it may be preferable to clear the cache to reduce the memory footprint of the application.  This method may also be used instead of using varying `cacheKey`'s for remote data.  
-**Example:** `$('#MyInputBoxId').typeahead('clearCache');`
-
-#### jQuery#typeahead('openDropdown')
+Clears the current cache of the typeahead.  In most cases this is not needed.  However if you are reusing the page with different data and cache keys (for instance in SPA application), it may be preferable to clear the cache to reduce the memory footprint of the application.  This method may also be used instead of using varying `cacheKey`'s for remote data. 
+ 
+**Example:** 
+    
+    $('#MyInputBoxId').typeahead('clearCache');
+    
+#### jQuery#typeahead('openDropdown') **>New<**
 Opens the dropdown on the relevant element (only if it has suggestions)  
-**Example:** `$('#MyInputBoxId').typeahead('openDropdown');`
+  
+**Example:**  
+    
+    $('#MyInputBoxId').typeahead('openDropdown');
+    
+#### jQuery#typeahead('closeDropdown') **>New<**
+Closes the dropdown on the relevant element.  
 
-#### jQuery#typeahead('closeDropdown')
-Closes the dropdown on the relevant element.
-**Example:** `$('#MyInputBoxId').typeahead('closeDropdown');`
-
+**Example:**  
+    
+    $('#MyInputBoxId').typeahead('closeDropdown');
+    
 ### Dataset
 
 A dataset is an object that defines a set of data that hydrates suggestions. Typeaheads can be backed by multiple datasets. Given a query, a typeahead instance will inspect its backing datasets and display relevant suggestions to the end-user. 
@@ -121,7 +148,7 @@ When defining a dataset, the following options are available:
 
 * `valueKey` – The key used to access the value of the datum in the datum object. Defaults to `value`.  
 
-* `nameKey` – If the input display name should be other than the unique value, then this is the name of the datum in the datum object. Defaults to `value` or the value of the `valueKey` .
+* `nameKey` **>New<** – If the input display name should be other than the unique value, then this is the name of the datum in the datum object. Defaults to `value` or the value of the `valueKey` .
 
 * `limit` – The max number of suggestions from the dataset to display for a given query. Defaults to `5`.
 
@@ -129,20 +156,23 @@ When defining a dataset, the following options are available:
 
 * `template` – The template used to render suggestions. Can be a string or a precompiled template. If not provided, suggestions will render as their value contained in a `<p>` element (i.e. `<p>value</p>`).
 
-* `engine` – The template engine used to compile/render `template` if it is a string. Any engine can use used as long as it adheres to the [expected API][template-engine-compatibility]. **Required** if `template` is a string.
+* `engine` – The template engine used to compile/render `template` if it is a string. Any engine can use used as long as it adheres to the [expected API][template-engine-compatibility].  
+**Required** if `template` is a string.
 
-* `restrictInputToDatum` – This option will make sure the user can only leave the input box with blank text or text that exists in the nameKey field of the Datum.     
+* `restrictInputToDatum` **>New<** – This option will make sure the user can only leave the input box with empty text or text corresponding to the internal `selectedDatum`.  The `selectedDatum` is set by `autocomplete` or `selection` events, or programmatically by invoking the typeahead `setDatum` method.   
 When user leaves the input box one of these following things will happen:  
-**a)** *If the text is blank, the selected event returning null datum will be razed.  The method getDatum will return null if called.*  
-**b)** *If the user never selected or autocompleted suggestion and it was not initialized with the setDatum mehtod, the text and the selectedDatum will be set to ''.  The method getDatum will return null if called.*  
-**c)** *If the user initialized (with setDatum), selected or autocompleted suggestion and did not change the text after that, nothing happens.  The method getDatum will return the corresponding datum.*  
-**d)** *If the user initialized (with setDatum), selected or autocompleted suggestion and then changed the text without autocompleting or selecting, the text will be set to the value of the last initialized, autocompleted or selected datum.  The method getDatum will return the corresponding datum.*   
-
+*If the string is empty the internal `selectedDatum` retrieved by the `getDatum` method will be set to null.  The event `noSelect` will be raised.  
+If the string matches the internal `selectedDatum` nothing happens.
+If we have the internal `selectedDatum` set, the text will be set to that datums name.  No events will be raised*.
+    
 * `header` – The header rendered before suggestions in the dropdown menu. Can be either a DOM element or HTML.
 
 * `footer` – The footer rendered after suggestions in the dropdown menu. Can be either a DOM element or HTML.
 
 * `local` – An array of [datums][datum].
+
+* `localSearcher` **>New<** - Function with the signature function(query,dataset) to override the normal suggestion getter for the local and prefetched data. It returns list of search items (suggestions) on the form {name: `<display name>`, value: `<key value>`, tokens: `<List of search tokens>`, datum: `<the datum object>`}.  The query parameter is the current search query and the dataset the typeahead dataset object.  
+***Be warned:** it requires of knowledge of the internals of typeahead to create function of this complexity.*
 
 * `prefetch` – Can be a URL to a JSON file containing an array of datums or, if more configurability is needed, a [prefetch options object][prefetch].
 
@@ -152,31 +182,31 @@ When user leaves the input box one of these following things will happen:
 ### Datum
 
 The individual units that compose datasets are called datums. The canonical form of a datum is an object with a `value` property and a `tokens` property. `value` is the string that represents the underlying value of the datum and `tokens` is a collection of **single-word** strings that aid typeahead.js in matching datums with a given query.
-
-```javascript
-{
-  value: '@JakeHarding',
-  tokens: ['Jake', 'Harding']
-}
-```
+    
+    javascript
+    {
+      value: '@JakeHarding',
+      name: 'Jake Harding',
+      tokens: ['Jake', 'Harding']
+    }
+    
 
 For ease of use, datums can also be represented as a string. Strings found in place of datum objects are implicitly converted to a datum object.
 
 When datums are rendered as suggestions, the datum object is the context passed to the template engine. This means if you include any arbitrary properties in datum objects, those properties will be available to the template used to render suggestions.
+    
+    html
+    <img src="{{profileImageUrl}}">
+    <p><strong>{{name}}</strong>&nbsp;{{value}}</p>   
+    
+    javascript
+    {
+        value: '@JakeHarding',
+        tokens: ['Jake', 'Harding'],
+        name: 'Jake Harding',
+        profileImageUrl: 'https://twitter.com/JakeHaridng/profile_img'
+    }
 
-```html
-<img src="{{profileImageUrl}}">
-<p><strong>{{name}}</strong>&nbsp;{{value}}</p>
-```
-
-```javascript
-{
-  value: '@JakeHarding',
-  tokens: ['Jake', 'Harding'],
-  name: 'Jake Harding',
-  profileImageUrl: 'https://twitter.com/JakeHaridng/profile_img'
-}
-```
 
 ### Prefetch
 
@@ -199,21 +229,24 @@ When configuring `remote`, the following options are available:
 
 * `url` – A URL to make requests to when  the data provided by `local` and `prefetch` is insufficient.  **`url` or `handler` options are required for remote lookups.**
 
-* `handler` - Custom function with the signature `function(query, data)` to take control of the typeahead data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source using the **promise pattern**.    
-In case this function is used for asynchronous data fetch it must return `promise`, but it should return `true` for synchronous operations.  Both [JQuery promises](http://api.jquery.com/promise/ "Jquery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.  
-When `handler` option is used for data retrieval the options `beforeSend`, `replace`, `wildcard`, `dataType` and  `cache` do not apply.  However the throttling options are used and the cache control is also functioning.
+* `handler` **>New<** - Custom function with the signature `function(query, data)` to take control of the typeahead data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source using the **promise pattern**.    
+In case this function is used for asynchronous data fetch it must return `promise`, but it should return `true` for synchronous operations.  Both [JQuery promises](http://api.jquery.com/promise/ "JQuery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.  
+When `handler` option is used for data retrieval the options `beforeSend`, `replace`, `wildcard`, `dataType` and  `cache` do not apply.  However the throttling options are used and the cache control is also in play.
 See [this page](Computed.md) for details on the handler usage.
 
-* `dataType` – The type of data you're expecting from the server. See the [jQuery.ajax docs][jquery-ajax] for more info. Defaults to `json`.  This applies only in conjunction with the `url` option.
+* `dataType` – The type of data you're expecting from the server. See the [jQuery.ajax docs][jquery-ajax] for more info. Defaults to `Json`.  This applies only in conjunction with the `url` option.
 
 * `cache` – Determines whether or not JQuery will cache responses. See the [jQuery.ajax docs][jquery-ajax] for more info.  This applies only for the `url` option, by default all remote responses are cached for each query.
 
-* `skipCache` – Orders remote queries not to use local cache but allways refetch data on each keystroke.  This can be useful for mutating remote data.
+* `skipCache` **>New<** – Orders remote queries not to use local cache but always go remote for data lookup on each keystroke.  This can be useful for mutating remote data.
 
-* `cacheKey` –  By default all remote lookups are cached per string combination entered in the typeahead control. This option can be used to control caching which may be necessary if more than one typeahead control is used in the application. By default this value is set to the `url` value for **url** requests and the `name` value for **handler** requests.  
-This option value may also be set to function with the signature function(query).  It must then return cache key including the query value.  This function method may be particularly helpful when using handler functions for remote lookup where results may be varying on different contexts.  
-**Example:**  `cacheKey: function(query) { return 'admin1_#' + vm.country + '_%' + query;}`
+* `cacheKey` **>New<** –  By default all remote lookups are cached per string combination entered in the typeahead control. This option can be used to control caching which may be necessary if more than one typeahead control is used in the application. By default this value is set to the url value for `url` requests and the `name` value for `handler` requests.  
+This option value may also be set to function with the signature `function(query)`.  It must then return cache key including the query value.  This function method may be particularly helpful when using handler functions for remote lookup where results may be varying on different contexts.  
 
+**Example:**  
+    
+    cacheKey: function(query) { return 'admin1_#' + vm.country + '_%' + query;}
+    
 * `timeout` – Sets a timeout for requests. See the [jQuery.ajax docs][jquery-ajax] for more info.  This applies only in conjunction with the `url` option.
 
 * `wildcard` – The pattern in `url` that will be replaced with the user's query when a request is made. Defaults to `%QUERY`.  This applies only in conjunction with the `url` option.
@@ -245,32 +278,36 @@ typeahead.js triggers the following custom events:
 
 * `typeahead:autocompleted` – Triggered when the query is autocompleted. The datum used for auto completion is passed to the event handler as an argument in addition to the name of the dataset it originated from.
 
+* `typeahead:noSelect` **>New<** – Triggered when user exists the input without text matching any name in the suggestion data.  This is also triggered if the input value is empty.
+
 All custom events are triggered on the element initialized as a typeahead.
 
 You can use JQuery to hook the custom events to your handling functions.  
+  
 **Example:**  
-```
-$(´#yourElementIdWithHash´.on('typeahead:selected', yourSelectedEfentHanlerFunction); 
-```
+    
+    $(´#yourElementIdWithHash´.on('typeahead:selected', yourSelectedEfentHanlerFunction); 
+    
 where the handler function has this format:
-``function yourSelectedEventHanlerFunction(element,datum) {``  
-   Datum contains here the info about the cell you selected.   
-   Element is the input box element.
-``}``
-
+    
+    function yourSelectedEventHanlerFunction(element,datum) { 
+       Datum contains here the info about the cell you selected.   
+       Element is the input box element.
+    }
+  
 
 ### Template Engine Compatibility
 
 Any template engine will work with typeahead.js as long as it adheres to the following API:
-
-```javascript
-// engine has a compile function that returns a compiled template
-var compiledTemplate = ENGINE.compile(template);
-
-// compiled template has a render function that returns the rendered template
-// render function expects the context to be first argument passed to it
-var html = compiledTemplate.render(context);
-```
+    
+    javascript
+    // engine has a compile function that returns a compiled template
+    var compiledTemplate = ENGINE.compile(template);
+    
+    // compiled template has a render function that returns the rendered template
+    // render function expects the context to be first argument passed to it
+    var html = compiledTemplate.render(context);
+    
 
 Check out [Hogan.js][hogan.js] if you're looking for a compatible mustache templating engine.
 
@@ -279,22 +316,22 @@ Check out [Hogan.js][hogan.js] if you're looking for a compatible mustache templ
 The styles applied by typeahead.js are for positioning the hint and the dropdown menu, no other styles should be affected. In most cases the styles applied by typeahead.js will work like a charm, but there are edge cases where some custom styles will be necessary. If you're having CSS issues, create an [issue][issues] or tweet [@typeahead][@typeahead] for support.
 
 By default, the dropdown menu created by typeahead.js is going to look ugly and you'll want to style it to ensure it fits into the theme of your web page. Below is a Mustache template describing the DOM structure of a typeahead.js dropdown menu. Note that the `{{{html}}}` tag is the HTML generated by the custom template you provide when defining datasets.
-
-```html
-<span class="tt-dropdown-menu">
-  {{#dataset}}
+    
+    html
+    <span class="tt-dropdown-menu">
+      {{#dataset}}
     <div class="tt-dataset-{{name}}">
       {{{header}}}
       <span class="tt-suggestions">
-        {{#suggestions}}
-          <div class="tt-suggestion">{{{html}}}</div>
-        {{/suggestions}}
+    {{#suggestions}}
+      <div class="tt-suggestion">{{{html}}}</div>
+    {{/suggestions}}
       </span>
       {{{footer}}}
     </div>
-  {{/dataset}}
-</span>
-```
+      {{/dataset}}
+    </span>
+    
 
 When an end-user mouses or keys over a `.tt-suggestion`, the class `tt-is-under-cursor` will be added to it. You can use this class as a hook for styling the "under cursor" state of suggestions.
 
