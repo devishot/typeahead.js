@@ -1,12 +1,13 @@
-/*!
+﻿/*!
  * typeahead.js 0.9.4  Svakinn: perhaps the many changes here deserve a new version number - of course few comments need to be removed before this code is released
- * Besides few bugfixes the major issues changed are following
+ * Bugfixes: IE11 detection, blur/focus flicker on dropdown click, local suggestions now handle values with spaces
  * Remote handler functionality (handling function option instead of ajax) still allowing for throttling and cache, supports JQuery and Q promises
  * Remote cashing control: user can skip caching, define caching key and even caching key function 
  * Optional handling for restricting selection to the set of Datums provided (restrictInputToDatum)
  * Introduction of name/key values: data key may differ from the display name
- * Maintaining the concept of selected datum, updated on autocomplete or selection
- * New typeahead interface methods: getDatum, setDatum, clearCache, openDropdown and closeDropdown
+ * Introducing the concept of selected datum, updated on autocomplete or selection
+ * New typeahead interface methods: getDatum, getQuery, setDatum, clearCache, openDropdown and closeDropdown
+ * New event noSelect: when user leaves field without selecting valid datum.
  * Accompanying this update is a Knockout binding handler that greatly simplifies the work of initialization, auto-Datum creation and two-way databinding to selected Datum
  * See updated Readme.md and the new Handler.md and Knockout.md for details.
  * Credits for this update:  nathankoop and bowser project for the IE11 detection, zhigang1992 for the restrictInputToDatum option, cusspvz for the handler name, adanaltamira for minLength documentation, and last but not least
@@ -16,7 +17,7 @@
  */
 
 (function ($) {
-    var VERSION = "0.9.4"; 
+    var VERSION = "0.9.4";
     var utils = {
         isMsie: function () {
             //Improved IE11 detection (borrowed from the bowser Github project: https://github.com/ded/bowser)
@@ -411,7 +412,8 @@
             thumbprint: "thumbprint",
             protocol: "protocol",
             itemHash: "itemHash",
-            adjacencyList: "adjacencyList"
+            adjacencyList: "adjacencyList",
+            nameAdjacencyList: "nameAdjacencyList"
         };
         function Dataset(o) {
             utils.bindAll(this);
@@ -434,8 +436,10 @@
             this.local = o.local;
             this.prefetch = o.prefetch;
             this.remote = o.remote;
+            this.localSearcher = o.localSearcher; //override for _getLocalSuggestions
             this.itemHash = {};
             this.adjacencyList = {};
+            this.nameAdjacencyList = {};
             this.storage = o.name ? new PersistentStorage(o.name) : null;
         }
         utils.mixin(Dataset.prototype, {
@@ -443,22 +447,24 @@
                 this._mergeProcessedData(this._processData(data));
             },
             _loadPrefetchData: function (o) {
-                var that = this, thumbprint = VERSION + (o.thumbprint || ""), storedThumbprint, storedProtocol, storedItemHash, storedAdjacencyList, isExpired, deferred;
+                var that = this, thumbprint = VERSION + (o.thumbprint || ""), storedThumbprint, storedProtocol, storedItemHash, storedAdjacencyList, storedNameAdjacencyList, isExpired, deferred;
                 if (this.storage) {
                     storedThumbprint = this.storage.get(keys.thumbprint);
                     storedProtocol = this.storage.get(keys.protocol);
                     storedItemHash = this.storage.get(keys.itemHash);
                     storedAdjacencyList = this.storage.get(keys.adjacencyList);
+                    storedNameAdjacencyList = this.storage.get(keys.nameAdjacencyList);
                 }
                 isExpired = storedThumbprint !== thumbprint || storedProtocol !== utils.getProtocol();
                 o = utils.isString(o) ? {
                     url: o
                 } : o;
                 o.ttl = utils.isNumber(o.ttl) ? o.ttl : 24 * 60 * 60 * 1e3;
-                if (storedItemHash && storedAdjacencyList && !isExpired) {
+                if (storedItemHash && storedAdjacencyList && storedNameAdjacencyList && !isExpired) {
                     this._mergeProcessedData({
                         itemHash: storedItemHash,
-                        adjacencyList: storedAdjacencyList
+                        adjacencyList: storedAdjacencyList,
+                        nameAdjacencyList: storedNameAdjacencyList
                     });
                     deferred = $.Deferred().resolve();
                 } else {
@@ -466,10 +472,11 @@
                 }
                 return deferred;
                 function processPrefetchData(data) {
-                    var filteredData = o.filter ? o.filter(data) : data, processedData = that._processData(filteredData), itemHash = processedData.itemHash, adjacencyList = processedData.adjacencyList;
+                    var filteredData = o.filter ? o.filter(data) : data, processedData = that._processData(filteredData), itemHash = processedData.itemHash, adjacencyList = processedData.adjacencyList, nameAdjacencyList = processedData.nameAdjacencyList;
                     if (that.storage) {
                         that.storage.set(keys.itemHash, itemHash, o.ttl);
                         that.storage.set(keys.adjacencyList, adjacencyList, o.ttl);
+                        that.storage.set(keys.nameAdjacencyList, nameAdjacencyList, o.ttl);
                         that.storage.set(keys.thumbprint, thumbprint, o.ttl);
                         that.storage.set(keys.protocol, utils.getProtocol(), o.ttl);
                     }
@@ -488,27 +495,33 @@
                 } else {
                     item.datum = datum;
                 }
-                item.tokens = utils.filter(item.tokens, function (token) {
-                    return !utils.isBlankString(token);
-                });
-                item.tokens = utils.map(item.tokens, function (token) {
-                    return token.toLowerCase();
-                });
+                //We should trust the users not to put in empty tokens - if they do, no harm done
+                //item.tokens = utils.filter(item.tokens, function (token) {
+                //    return !utils.isBlankString(token);
+                //});
+                //in-case insensitve search using regEx should be quicker than indexof so we can skip this processing
+                //item.tokens = utils.map(item.tokens, function (token) {
+                //    return token.toLowerCase();
+                //});
                 return item;
             },
             _processData: function (data) {
-                var that = this, itemHash = {}, adjacencyList = {};
+                var that = this, itemHash = {}, adjacencyList = {}, nameAdjacencyList = {};
                 utils.each(data, function (i, datum) {
                     var item = that._transformDatum(datum), id = utils.getUniqueId(item.value);
                     itemHash[id] = item;
                     utils.each(item.tokens, function (i, token) {
-                        var character = token.charAt(0), adjacency = adjacencyList[character] || (adjacencyList[character] = [id]);
+                        var character = token.charAt(0).toLowerCase();
+                        adjacency = adjacencyList[character] || (adjacencyList[character] = [id]);
+                        nameAdjacency = nameAdjacencyList[character] || (nameAdjacencyList[character] = [id]);
                         !~utils.indexOf(adjacency, id) && adjacency.push(id);
+                        !~utils.indexOf(nameAdjacency, id) && nameAdjacency.push(id);
                     });
                 });
                 return {
                     itemHash: itemHash,
-                    adjacencyList: adjacencyList
+                    adjacencyList: adjacencyList,
+                    nameAdjacencyList: nameAdjacencyList
                 };
             },
             _mergeProcessedData: function (processedData) {
@@ -518,7 +531,13 @@
                     var masterAdjacency = that.adjacencyList[character];
                     that.adjacencyList[character] = masterAdjacency ? masterAdjacency.concat(adjacency) : adjacency;
                 });
+                utils.each(processedData.nameAdjacencyList, function (character, nameAdjacency) {
+                    var masterNameAdjacency = that.nameAdjacencyList[character];
+                    that.nameAdjacencyList[character] = masterNameAdjacency ? masterNameAdjacency.concat(nameAdjacency) : nameAdjacency;
+                });
             },
+            /*
+            Replace this one with one that actually works for data uincluding spaces
             _getLocalSuggestions: function (terms) {
                 var that = this, firstChars = [], lists = [], shortestList, suggestions = [];
                 utils.each(terms, function (i, term) {
@@ -552,6 +571,58 @@
                 });
                 return suggestions;
             },
+            */
+            //Here there is only one search term: the query entered
+            //This search prefers names first and then tokens. This is helpful since we are using hint system and want the hint to match the name
+            _getLocalSuggestions: function (query) {
+                var suggestions = [], src = query.toLowerCase(), itLen, noFound = 0, regSrc = new RegExp('^' + src, 'i');
+                //First round, name-search
+                //Use the new nameAdjacencyList for indexing on the first char:
+                var nlist = this.nameAdjacencyList[src.charAt(0)];
+                if (nlist) {
+                    itLen = nlist.length;
+                    for (var i = 0; i < itLen; i++) {
+                        var item = this.itemHash[nlist[i]];
+                        if (item.name.search(regSrc) === 0) {
+                            suggestions.push(item);
+                            noFound++;
+                        };
+                        if (noFound == this.limit)
+                            break;
+                    };
+                }
+                if (noFound < this.limit) {
+                    //second round tuple search
+                    var list = this.adjacencyList[src.charAt(0)];
+                    if (!list)
+                        return suggestions;
+                    itLen = list.length;
+                    for (var i = 0; i < itLen; i++) {
+                        var item = this.itemHash[list[i]];
+                        var isMatch =  utils.some(item.tokens, function (token) {
+                            return token.search(regSrc) === 0;
+                        });
+                        if (isMatch) {
+                            //Check if suggestion allready found
+                            var isInSuggest = false;
+                            utils.each(suggestions, function (i, sugg) {
+                                if (sugg.value == item.value) {
+                                    isInSuggest = true;
+                                    return false; //break
+                                }
+                            });
+                            if (!isInSuggest) {
+                                suggestions.push(item);
+                                noFound++;
+                                if (noFound == this.limit)
+                                    break;
+                            }
+
+                        }
+                    }
+                }
+                return suggestions;
+            },
             initialize: function () {
                 var deferred;
                 this.local && this._processLocalData(this.local);
@@ -570,8 +641,12 @@
                 if (query.length < this.minLength) {
                     return;
                 }
-                terms = utils.tokenizeQuery(query);
-                suggestions = this._getLocalSuggestions(terms).slice(0, this.limit);
+                //terms = utils.tokenizeQuery(query);
+                //suggestions = this._getLocalSuggestions(terms).slice(0, this.limit);
+                if (this.localSearcher && typeof this.localSearcher == 'function')
+                    suggestons = this.localSearcher(query,this);
+                else
+                    suggestions = this._getLocalSuggestions(query);
                 if (this.transport)
                     cacheHit = this.transport.get(query, processRemoteData);
                 !cacheHit && cb && cb(suggestions);
@@ -618,6 +693,7 @@
                 38: "up",
                 40: "down"
             };
+            this.tracer = o.tracer;
             this.$hint = $(o.hint);
             this.$input = $(o.input).on("blur.tt", this._handleBlur).on("focus.tt", this._handleFocus).on("keydown.tt", this._handleSpecialKeyEvent);
             if (!utils.isMsie()) {
@@ -635,11 +711,11 @@
         }
         utils.mixin(InputView.prototype, EventTarget, {
             _handleFocus: function () {
-                //console.log('handle trigger focus');
+                //this.tracer.push('inputview focus');
                 this.trigger("focused");
             },
             _handleBlur: function () {
-                //console.log('handle trigger blured');
+                //this.tracer.push('inputview blured');
                 this.trigger("blured");
             },
             _handleSpecialKeyEvent: function ($e) {
@@ -749,10 +825,11 @@
         };
         function DropdownView(o) {
             utils.bindAll(this);
+            this.tracer = o.tracer;
             this.isOpen = false;
             this.isEmpty = true;
             this.isMouseOverDropdown = false;
-            this.$menu = $(o.menu).on("mouseenter.tt", this._handleMouseenter).on("mouseleave.tt", this._handleMouseleave).on("click.tt", ".tt-suggestion", this._handleSelection).on("mouseover.tt", ".tt-suggestion", this._handleMouseover);
+            this.$menu = $(o.menu).on("mousedown.tt",this._handleMouseDown).on("mouseenter.tt", this._handleMouseenter).on("mouseleave.tt", this._handleMouseleave).on("click.tt", ".tt-suggestion", this._handleSelection).on("mouseover.tt", ".tt-suggestion", this._handleMouseover);
         }
         utils.mixin(DropdownView.prototype, EventTarget, {
             _handleMouseenter: function () {
@@ -766,9 +843,14 @@
                 this._getSuggestions().removeClass("tt-is-under-cursor");
                 $suggestion.addClass("tt-is-under-cursor");
             },
+            _handleMouseDown: function ($e) {
+                //This stops the inputview from bluring (this from focusing) but the _handleSelection is still executed without problem (which is exactly what we needed)
+                //this.tracer.push('Dropdownview mousedown target: ' + $e.type + ' ' + $e.currentTarget.innerText);
+                $e.preventDefault();
+            },
             _handleSelection: function ($e) {
+                //this.tracer.push('Dropdownview handleselecton target: ' + extractSuggestion($($e.currentTarget)).name);
                 var $suggestion = $($e.currentTarget);
-                $e.preventDefault(); //try to stop click on item to trigger blur/focus on the input view
                 this.trigger("suggestionSelected", extractSuggestion($suggestion));
             },
             _show: function () {
@@ -888,6 +970,7 @@
                 this.trigger("suggestionsRendered");
             },
             clearSuggestions: function (datasetName) {
+                //this.tracer.push('Dropdownview clearSuggestions');
                 var $datasets = datasetName ? this.$menu.find(".tt-dataset-" + datasetName) : this.$menu.find('[class^="tt-dataset-"]'), $suggestions = $datasets.find(".tt-suggestions");
                 $datasets.hide();
                 $suggestions.empty();
@@ -958,6 +1041,8 @@
             this.nameKey = null;
             this.valueKey = null;
             this.restrictInputToDatum = null;
+            this.tracer = null; //Debug tool for logs since console.log is unusable in IE since it receives focus
+            //Pickup required options from the datasets
             if (this.datasets && this.datasets.length > 0) {
                 for (var i = 0; i < this.datasets.length; i++) {
                     if (this.datasets[i].isRemote)
@@ -968,19 +1053,23 @@
                         this.valueKey = this.datasets[i]['valueKey'];
                     if (!this.restrictInputToDatum && this.datasets[i]['restrictInputToDatum'])
                         this.restrictInputToDatum = this.datasets[i]['restrictInputToDatum'];
+                    if (!this.tracer)
+                        this.tracer = this.datasets[i]['tracer'];
                 }
             }
+            if (!this.tracer) this.tracer = [];
             $menu = this.$node.find(".tt-dropdown-menu");
             $input = this.$node.find(".tt-query");
             $hint = this.$node.find(".tt-hint");
             this.dropdownView = new DropdownView({
-                menu: $menu
+                menu: $menu,
+                tracer: this.tracer
             }).on("suggestionSelected", this._handleSelection).on("cursorMoved", this._clearHint).on("cursorMoved", this._setInputValueToSuggestionUnderCursor).on("cursorRemoved", this._setInputValueToQuery).on("cursorRemoved", this._updateHint).on("suggestionsRendered", this._updateHint).on("opened", this._updateHint).on("closed", this._clearHint).on("opened closed", this._propagateEvent);
             this.inputView = new InputView({
                 input: $input,
-                hint: $hint
+                hint: $hint,
+                tracer: this.tracer
             }).on("focused", this._openDropdown).on("blured", this._closeDropdown).on("blured", this._setInputValueToQuery).on("blured", this._manageLeaving).on("enterKeyed tabKeyed", this._handleSelection).on("queryChanged", this._clearHint).on("queryChanged", this._clearSuggestions).on("queryChanged", this._getSuggestions).on("whitespaceChanged", this._updateHint).on("queryChanged whitespaceChanged", this._openDropdown).on("queryChanged whitespaceChanged", this._setLanguageDirection).on("escKeyed", this._closeDropdown).on("escKeyed", this._setInputValueToQuery).on("tabKeyed upKeyed downKeyed", this._managePreventDefault).on("upKeyed downKeyed", this._moveDropdownCursor).on("upKeyed downKeyed", this._openDropdown).on("tabKeyed leftKeyed rightKeyed", this._autocomplete);
-            //}).on("focused", this._openDropdown).on("blured", this._closeDropdown).on("blured", this._setInputValueToQuery).on("blured", this._checkMismatch).on("enterKeyed tabKeyed", this._handleSelection).on("queryChanged", this._clearHint).on("queryChanged", this._clearSuggestions).on("queryChanged", this._getSuggestions).on("whitespaceChanged", this._updateHint).on("queryChanged whitespaceChanged", this._openDropdown).on("queryChanged whitespaceChanged", this._setLanguageDirection).on("escKeyed", this._closeDropdown).on("escKeyed", this._setInputValueToQuery).on("tabKeyed upKeyed downKeyed", this._managePreventDefault).on("upKeyed downKeyed", this._moveDropdownCursor).on("upKeyed downKeyed", this._openDropdown).on("tabKeyed leftKeyed rightKeyed", this._autocomplete);
         }
         utils.mixin(TypeaheadView.prototype, EventTarget, {
             _managePreventDefault: function (e) {
@@ -1000,21 +1089,31 @@
                 preventDefault && $e.preventDefault();
             },
             _manageLeaving: function (e) {
-                //console.log('Leaving');
-                if (this.restrictInputToDatum) {
-                    var inputValue = this.inputView.getInputValue();
-                    //To allow user to select nothing we nullify the datum if the input string is empty
-                    if (inputValue === null || inputValue.length == 0 && this.selectedDatum) {
-                        this.setDatum(null);
-                        this.eventBus.trigger("selected", null, null); //TTrigger event for databinding since user is deliberatly selecting empty value
+                //this.tracer.push('Leaving');
+                var inputValue = this.inputView.getInputValue();
+                var restrict = (typeof this.restrictInputToDatum == 'function' ? this.restrictInputToDatum() : this.restrictInputToDatum);
+                //To allow user to select nothing we nullify the datum if the input string is empty and the datum name is not empty
+                if (inputValue === null || inputValue.length == 0) {
+                    if (!this.selectedDatum || this.selectedDatum[this.nameKey]) {
+                        this.selectedDatum = null; //Clear the selected datum and notify
+                        this.eventBus.trigger("noSelect", ''); //TTrigger event for databinding since user is deliberatly selecting empty value
                     }
-                    else if (!this.selectedDatum) {
-                        if (inputValue === null || inputValue.length > 0)
-                            this.inputView.setInputValue('', true);
-                    }
-                    else if (this.selectedDatum[this.nameKey] != inputValue)
-                        this.inputView.setInputValue(this.selectedDatum[this.nameKey], true);
                 }
+                else if (this.selectedDatum && inputValue != this.selectedDatum[this.nameKey]) {
+                    if (restrict) {
+                        this.inputView.setInputValue(this.selectedDatum[this.nameKey], true); //Reset input value as current datum
+                    }
+                    else {
+                        this.selectedDatum = null; //Clear the selected datum and notify (without removing the input text)
+                        this.eventBus.trigger("noSelect", inputValue); //TTrigger event for databinding of selected datum
+                    }
+                }
+                else if (!this.selectedDatum && inputValue !== null && inputValue.length > 0) {
+                    if (restrict)
+                        this.inputView.setInputValue('', true); //Reset input value to empty value if restriction
+                    this.eventBus.trigger("noSelect", inputValue); //TTrigger event for databinding of selected datum
+                }
+                
             },
             _setLanguageDirection: function () {
                 var dir = this.inputView.getLanguageDirection();
@@ -1061,21 +1160,37 @@
                 }
             },
             _handleSelection: function (e) {
-                var byClick = e.type === "suggestionSelected", suggestion = byClick ? e.data : this.dropdownView.getSuggestionUnderCursor();
+                //this.tracer.push('Typeahead view handle selection');
+                //var byClick = e.type === "suggestionSelected", suggestion = byClick ? e.data : this.dropdownView.getSuggestionUnderCursor();
+                //In any case now the getSuggestion under control works fine
+                //suggestion = this.dropdownView.getSuggestionUnderCursor();
+                //Change this to accept the suggestion if we get it by event but as a failback look for it in the dropdownview
+                if (e.data && e.data.hasOwnProperty('datum'))
+                    suggestion = e.data;
+                else
+                    suggestion = this.dropdownView.getSuggestionUnderCursor();
                 if (suggestion) {
-                    this.inputView.setInputValue(suggestion.name);
+                    //this.tracer.push('Suggestion foud: ' + suggestion.name);
+                    this.inputView.setQuery(suggestion.name);
+                    this.inputView.setInputValue(suggestion.name, true);
                     this.selectedDatum = suggestion.datum;
-                    //console.log('Suggestion: ' + suggestion.name);
-                    //If user clicked dropdown item we already have blurevent occurance on the input box.
-                    //This is not ideal since blur event on the input box can not be trusted to mark user leaving the box
-                    //The quick fix here is to refocus it, what about issuing deferred tab in the process to leave the field ?
-                    byClick ? this.inputView.focus() : e.data.preventDefault();
-                    byClick && utils.isMsie() ? utils.defer(this.dropdownView.close) : this.dropdownView.close();
+                    this._clearSuggestions();
+                    this._getSuggestions();
+                    //this._updateHint();
+                    //The previous code was to tackle the problem of the dropdownview having received focus on mouse click
+                    //This has been fixed now, at least for FF and Crome so we sould be able to simpli close the dropdown without refocusing the input view
+                    //byClick ? this.inputView.focus() : e.data.preventDefault();
+                    //byClick && utils.isMsie() ? utils.defer(this.dropdownView.close) : this.dropdownView.close();
+                    //Another thing we want to do here is to clear 
+                    this.dropdownView.close();
                     this.eventBus.trigger("selected", suggestion.datum, suggestion.dataset);
-                }
+                };
+                //else
+                //    this.tracer.push('Typeaheadview handleselection found no suggestion');
             },
             _getSuggestions: function () {
                 var that = this, query = this.inputView.getQuery();
+                //this.tracer.push('Typeaheadview getSuggestins: '+query);
                 if (utils.isBlankString(query)) {
                     return;
                 }
@@ -1100,11 +1215,12 @@
                 hint = this.inputView.getHintValue();
                 if (hint !== "" && query !== hint) {
                     suggestion = this.dropdownView.getFirstSuggestion();
-                    //console.log('autocomplete: ' + suggestion.name);
+                    //this.tracer.push('autocomplete: ' + suggestion.name);
                     this.selectedDatum = suggestion.datum;
                     this.inputView.setInputValue(suggestion.name);
                     this.eventBus.trigger("autocompleted", suggestion.datum, suggestion.dataset);
                 }
+                //this.tracer.push('Typeaheadview autocomplete: ' + query);
             },
             _propagateEvent: function (e) {
                 this.eventBus.trigger(e.type);
@@ -1232,6 +1348,10 @@
             getDatum: function () {
                 var view = $(this).data(viewKey);
                 return view && view.selectedDatum;
+            },
+            getQuery: function () {
+                var view = $(this).data(viewKey);
+                return view && view.inputView.getInputValue();
             },
             clearCache: function () {
                 var view = $(this).data(viewKey);
