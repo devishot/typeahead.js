@@ -19,6 +19,10 @@ Other methods:
 
 **Note:** typeahead.js has a dependency on [jQuery][jquery] 1.9+, which must be loaded before *typeahead.js*.
 
+New features
+------------
+Se [this doc](New.md) for the new features in the latest update
+
 Examples
 --------
 
