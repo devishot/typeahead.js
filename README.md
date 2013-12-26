@@ -229,7 +229,7 @@ When configuring `prefetch`, the following options are available:
 * `url` – A URL to a JSON file containing an array of datums. **url or handler Required.**
 
 * `prefetcHandler` **>>New<<** - Custom function with the signature `function()`, returning array of datums, to take control of the prefetched data retrieval.  This can be both used to handle local synchronous data or to fetch asynchronous data from remote source using the **promise pattern**.    
-In case this function is used for asynchronous data fetch it must return `promise`, but it should return `true` for synchronous operations.  Both [JQuery promises](http://api.jquery.com/promise/ "JQuery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.
+In case this function is used for asynchronous data fetch it must return  the data array wraped in`promise` (i.e. `return $.Deferred().resolve(data);`), but it should return the data arrey  for synchronous operations.  Both [JQuery promises](http://api.jquery.com/promise/ "JQuery promises") and [Q promises](http://documentup.com/kriskowal/q/#introduction) are supported.
 
 * `ttl` – The time (in milliseconds) the prefetched data should be cached in local storage. Defaults to `86400000` (1 day).  Setting this value to 0 will prevent caching.
 
