@@ -71,7 +71,7 @@ ko.bindingHandlers.typeahead = {
         //var allBindings = allBindingsAccessor();
         var values = valueAccessor();
         var key = ko.unwrap(values.valueKey);
-        var nameKey = ko.unwrap(values.nameKey);
+        var nameKey = ko.unwrap(values.nameKey) || key;
         var tokenFields = ko.unwrap(values.tokenFields) || '';
         var valueFields = ko.unwrap(values.valueFields) || '';
         if (values.hasOwnProperty('selectedDatum')) {
@@ -105,7 +105,7 @@ ko.bindingHandlers.typeahead = {
             var name = ko.unwrap(value.name);
             var minLength = ko.unwrap(value.minLength);
             var valueKey = ko.unwrap(value.valueKey);
-            var nameKey = ko.unwrap(value.nameKey);
+            var nameKey = ko.unwrap(value.nameKey) || valueKey;
             var cacheKey = ko.unwrap(value.cacheKey);
             var skipCache = ko.unwrap(value.skipCache);
             var limit = ko.unwrap(value.limit);
@@ -351,4 +351,3 @@ ko.bindingHandlers.typeahead = {
         }
     }
 };
-
