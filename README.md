@@ -88,7 +88,7 @@ Destroys previously initialized typeaheads. This entails reverting DOM modificat
 
 #### jQuery#typeahead('setQuery', query) 
 Sets the current query of the typeahead. This is equivalent to using `$("input.typeahead").val(query)`.  
- ***>>New<<** In earlier versions of typeahead, if were using `remote` or `prefetch` data, this method was necessary to initialize the data in the control.  This fork solved this problem so initialization of data no longer requires any tricks.  You can use any method you like to set the data in the input box and do it whenever you like.*  
+ ***>>New<<** *In earlier versions of typeahead, if were using `remote` or `prefetch` data, this method was necessary to initialize the data in the control.  This fork solved this problem so initialization of data no longer requires any tricks.  You can use any method you like to set the data in the input box and do it whenever you like.* 
 
  
 **Example:**  
