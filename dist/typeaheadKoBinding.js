@@ -97,7 +97,7 @@ ko.bindingHandlers.typeahead = {
             val = [val];
         }
         var opts = [];
-        var selectedDatum, onAutoCompleted, onSelected, onNoSelect, onOpened, onClosed, onInitialized;
+        var selectedDatum, isBusy, onAutoCompleted, onSelected, onNoSelect, onOpened, onClosed, onInitialized;
         var alen = val.length;
         for (var i = 0; i < alen; i++) {
             value = val[i];
@@ -118,7 +118,7 @@ ko.bindingHandlers.typeahead = {
             var header = ko.unwrap(value.header);
             var footer = ko.unwrap(value.footer);
             var local = ko.unwrap(value.local);
-            var localSearcher = ko.unwrap(value.localSearcher);
+            var matcher = ko.unwrap(value.matcher);
             var prefetch = ko.unwrap(value.prefetch);
             var remote = ko.unwrap(value.remote);
 
@@ -138,6 +138,7 @@ ko.bindingHandlers.typeahead = {
             var handler = ko.unwrap(value.handler);
             var prefetchHandler = ko.unwrap(value.prefetchHandler);
             selectedDatum = value.selectedDatum;
+            isBusy = value.isBusy;
             onAutoCompleted = ko.unwrap(value.onAutoCompleted);
             onSelected = ko.unwrap(value.onSelected);
             onOpened = ko.unwrap(value.onOpened);
@@ -174,8 +175,8 @@ ko.bindingHandlers.typeahead = {
                 options.footer = footer;
             if (local)
                 options.local = ko.typeaheadPreFilter(local, tokenFields, valueFields, valueKey, nameKey, filter);
-            if (localSearcher)
-                options.localSearcher = localSearcher;
+            if (matcher)
+                options.matcher = matcher;
             if (prefetch || prefetchHandler) {
                 var lfilter = null;
                 var prefOptions = {};
@@ -341,6 +342,11 @@ ko.bindingHandlers.typeahead = {
             });
             $(element).on('typeahead:noSelect', function (e, inputText) {
                 onSelectedDatum(valueAccessor(), null);
+            });
+        }
+        if (isBusy) {
+            $(element).on('typeahead:busyUpdate', function (e, isBusy) {
+                valueAccessor().isBusy(isBusy);
             });
         }
         function onSelectedDatum(updateValue, datum) {
