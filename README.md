@@ -132,11 +132,11 @@ The cache cleared is both the remote and the prefetched cache.
 
 Reloads all suggestion data in the control.  This includes `local`, `prefetch` and `remote` data.  This function is mostly handy when the html page containing the control is reused, for example when used in SPA applications.  In that case the Initialize method is not executed automatically but we may still require refresh on the control.   
 When `cacheKey` is used as function or local data is data bound using data binding library (such as `Knockout`) we may want to update the suggestion data manually when underlying data (i.e. `local`) is changed.
-The refresh method returnes JQuery deferred object that resolves when all data is reloaded.  New event is also raised: `typeahead:refreshed`
+The refresh method returnes JQuery deferred object that resolves when all data is reloaded.  New event is also raised: `typeahead:reloaded`
  
 **Example:** 
     
-    $('#MyInputBoxId').typeahead('refresh');
+    $('#MyInputBoxId').typeahead('reload');
     
 #### jQuery#typeahead('openDropdown') **>>New<<**
 Opens the dropdown on the relevant element (only if it has suggestions)  
